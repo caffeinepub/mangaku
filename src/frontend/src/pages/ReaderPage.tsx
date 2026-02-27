@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LazyImage } from "@/components/LazyImage";
 import { useListPages, useListChapters } from "../hooks/useQueries";
 import { ExternalBlob } from "../backend";
 
@@ -30,6 +31,7 @@ export function ReaderPage() {
 
   const [mode, setMode] = useState<ReadMode>("vertical");
   const [currentPage, setCurrentPage] = useState(0);
+  const [imgLoading, setImgLoading] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const prevChapterId = useRef<string>(chapterId);
 
@@ -73,6 +75,25 @@ export function ReaderPage() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [mode, goToPrev, goToNext]);
+
+  // Preload next 2 pages in horizontal mode
+  useEffect(() => {
+    if (mode !== "horizontal" || sortedPages.length === 0) return;
+    [currentPage + 1, currentPage + 2].forEach((idx) => {
+      const page = sortedPages[idx];
+      if (!page) return;
+      const url = getPageUrl(page.blobId);
+      if (!url) return;
+      const img = new Image();
+      img.src = url;
+    });
+  }, [mode, currentPage, sortedPages]);
+
+  // Show skeleton overlay when switching pages in horizontal mode
+  useEffect(() => {
+    if (mode !== "horizontal") return;
+    setImgLoading(true);
+  }, [currentPage, mode]);
 
   // Touch swipe
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -205,12 +226,12 @@ export function ReaderPage() {
           // ─── Vertical Mode ────────────────────────────────────────
           <div className="max-w-3xl mx-auto">
             {sortedPages.map((page) => (
-              <img
+              <LazyImage
                 key={page.id.toString()}
                 src={getPageUrl(page.blobId)}
                 alt={`Halaman ${page.pageNumber}`}
-                className="reader-page w-full block"
-                loading="lazy"
+                className="reader-page"
+                aspectRatio="2/3"
               />
             ))}
             {/* End navigation */}
@@ -254,12 +275,20 @@ export function ReaderPage() {
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
-            {/* Page image */}
+            {/* Skeleton overlay while page is loading */}
+            {imgLoading && (
+              <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-neutral-800/60" />
+            )}
+
+            {/* Page image — key forces remount on page change */}
             <img
+              key={currentPage}
               src={getPageUrl(sortedPages[currentPage]?.blobId ?? "")}
               alt={`Halaman ${currentPage + 1}`}
               className="reader-page max-h-full max-w-full object-contain"
               draggable={false}
+              onLoad={() => setImgLoading(false)}
+              onError={() => setImgLoading(false)}
             />
 
             {/* Left click zone */}

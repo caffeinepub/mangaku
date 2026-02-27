@@ -60,6 +60,24 @@ export const Page = IDL.Record({
   'chapterId' : IDL.Nat,
   'blobId' : IDL.Text,
 });
+export const http_header = IDL.Record({
+  'value' : IDL.Text,
+  'name' : IDL.Text,
+});
+export const http_request_result = IDL.Record({
+  'status' : IDL.Nat,
+  'body' : IDL.Vec(IDL.Nat8),
+  'headers' : IDL.Vec(http_header),
+});
+export const TransformationInput = IDL.Record({
+  'context' : IDL.Vec(IDL.Nat8),
+  'response' : http_request_result,
+});
+export const TransformationOutput = IDL.Record({
+  'status' : IDL.Nat,
+  'body' : IDL.Vec(IDL.Nat8),
+  'headers' : IDL.Vec(http_header),
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -126,6 +144,7 @@ export const idlService = IDL.Service({
   'importFromMangaDex' : IDL.Func([IDL.Text], [IDL.Nat], []),
   'incrementViewCount' : IDL.Func([IDL.Nat], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'listAllGenres' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
   'listChaptersByComic' : IDL.Func([IDL.Nat], [IDL.Vec(Chapter)], ['query']),
   'listComics' : IDL.Func(
       [IDL.Nat, IDL.Nat, IDL.Text],
@@ -138,6 +157,11 @@ export const idlService = IDL.Service({
   'searchComics' : IDL.Func(
       [IDL.Text, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
       [IDL.Vec(Comic)],
+      ['query'],
+    ),
+  'transform' : IDL.Func(
+      [TransformationInput],
+      [TransformationOutput],
       ['query'],
     ),
   'updateComic' : IDL.Func(
@@ -211,6 +235,21 @@ export const idlFactory = ({ IDL }) => {
     'chapterId' : IDL.Nat,
     'blobId' : IDL.Text,
   });
+  const http_header = IDL.Record({ 'value' : IDL.Text, 'name' : IDL.Text });
+  const http_request_result = IDL.Record({
+    'status' : IDL.Nat,
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(http_header),
+  });
+  const TransformationInput = IDL.Record({
+    'context' : IDL.Vec(IDL.Nat8),
+    'response' : http_request_result,
+  });
+  const TransformationOutput = IDL.Record({
+    'status' : IDL.Nat,
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(http_header),
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -277,6 +316,7 @@ export const idlFactory = ({ IDL }) => {
     'importFromMangaDex' : IDL.Func([IDL.Text], [IDL.Nat], []),
     'incrementViewCount' : IDL.Func([IDL.Nat], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'listAllGenres' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
     'listChaptersByComic' : IDL.Func([IDL.Nat], [IDL.Vec(Chapter)], ['query']),
     'listComics' : IDL.Func(
         [IDL.Nat, IDL.Nat, IDL.Text],
@@ -289,6 +329,11 @@ export const idlFactory = ({ IDL }) => {
     'searchComics' : IDL.Func(
         [IDL.Text, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
         [IDL.Vec(Comic)],
+        ['query'],
+      ),
+    'transform' : IDL.Func(
+        [TransformationInput],
+        [TransformationOutput],
         ['query'],
       ),
     'updateComic' : IDL.Func(

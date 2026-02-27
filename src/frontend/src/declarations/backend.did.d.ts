@@ -45,6 +45,15 @@ export interface Page {
   'blobId' : string,
 }
 export type Time = bigint;
+export interface TransformationInput {
+  'context' : Uint8Array,
+  'response' : http_request_result,
+}
+export interface TransformationOutput {
+  'status' : bigint,
+  'body' : Uint8Array,
+  'headers' : Array<http_header>,
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -59,6 +68,12 @@ export interface _CaffeineStorageRefillInformation {
 export interface _CaffeineStorageRefillResult {
   'success' : [] | [boolean],
   'topped_up_amount' : [] | [bigint],
+}
+export interface http_header { 'value' : string, 'name' : string }
+export interface http_request_result {
+  'status' : bigint,
+  'body' : Uint8Array,
+  'headers' : Array<http_header>,
 }
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
@@ -100,6 +115,7 @@ export interface _SERVICE {
   'importFromMangaDex' : ActorMethod<[string], bigint>,
   'incrementViewCount' : ActorMethod<[bigint], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'listAllGenres' : ActorMethod<[], Array<string>>,
   'listChaptersByComic' : ActorMethod<[bigint], Array<Chapter>>,
   'listComics' : ActorMethod<[bigint, bigint, string], Array<Comic>>,
   'listCommentsByComic' : ActorMethod<[bigint], Array<Comment>>,
@@ -109,6 +125,7 @@ export interface _SERVICE {
     [string, [] | [string], [] | [string]],
     Array<Comic>
   >,
+  'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateComic' : ActorMethod<
     [
       bigint,

@@ -1,57 +1,35 @@
 # MangaKu
 
 ## Current State
-New project. No existing code.
+
+ReaderPage.tsx menampilkan halaman komik dalam dua mode: vertikal (scroll) dan horizontal (flip). Mode vertikal merender semua gambar sekaligus dengan `loading="lazy"` bawaan HTML. Mode horizontal hanya menampilkan satu gambar per halaman namun tidak ada preload untuk halaman berikutnya. Tidak ada skeleton/placeholder per gambar saat loading.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Public-facing webcomic site with MangaRead-style theme
-- Comic grid listing (homepage + latest updates)
-- Comic search page with genre/status filters and sorting (Latest Updated, Most Popular, A-Z)
-- Comic detail page (cover, title, synopsis, genre, status, chapter list)
-- Comic reader with vertical (scroll) and horizontal (flip) modes
-- Explicit comics locked behind user login
-- User comment system on comic detail pages (requires login)
-- Admin panel with:
-  - MangaDex API importer: search by title/ID, import metadata + cover + chapters + pages to blob storage
-  - Manual chapter grabber: input URL template with `{ch}` placeholder + chapter range, system fetches all pages via HTTP outcalls, saves to blob
-  - Comic management (edit, delete, set explicit flag)
-- Authorization system (admin role, user role)
-- Blob storage for cover images and comic pages
+- Komponen `LazyImage` dengan IntersectionObserver untuk lazy loading berbasis viewport
+- Skeleton placeholder per gambar di mode vertikal saat gambar belum masuk viewport atau belum selesai load
+- Preload gambar berikutnya (+1, +2) di mode horizontal supaya transisi cepat
+- Loading state per gambar di mode horizontal (spinner/skeleton overlay)
 
 ### Modify
-- N/A (new project)
+- Mode vertikal: ganti `<img>` biasa dengan komponen `LazyImage` yang memakai IntersectionObserver (bukan hanya `loading="lazy"` HTML)
+- Mode horizontal: tambah preloading gambar halaman berikutnya di background
 
 ### Remove
-- N/A (new project)
+- Tidak ada yang dihapus
 
 ## Implementation Plan
 
-### Backend (Motoko)
-1. **Data models**: Comic (id, title, cover_blob_id, genre[], status, synopsis, source, is_explicit, created_at, updated_at, view_count), Chapter (id, comic_id, number, title, page_count), Page (id, chapter_id, page_number, blob_id), Comment (id, comic_id, user_id, text, created_at)
-2. **Comic CRUD**: createComic, updateComic, deleteComic, getComic, listComics (paginated, sortable), searchComics (by title, genre, status)
-3. **Chapter/Page CRUD**: createChapter, deleteChapter, addPage, listChapters, getChapterPages
-4. **MangaDex import**: importFromMangaDex(mangadex_id) -- fetch metadata + chapters from MangaDex API via HTTP outcall, store cover in blob
-5. **Chapter grabber**: grabChapter(url_template, chapter_start, chapter_end) -- iterate over chapter range, HTTP outcall to each URL, parse image URLs, save to blob
-6. **Comments**: addComment, listComments(comic_id), deleteComment (admin)
-7. **View count**: incrementViewCount(comic_id)
-8. **Authorization**: admin and user roles
-
-### Frontend
-1. Layout with navbar (logo, search, login button)
-2. Homepage: latest updated comics grid + all comics grid
-3. Search page: text search + genre/status filter chips + sort dropdown
-4. Comic detail page: cover, metadata, synopsis, chapter list, comments section
-5. Reader page: toggle between vertical scroll and horizontal flip mode
-6. Admin panel: comic list management, MangaDex importer form, grabber form
-7. Auth: login/signup modal (user), admin login
-8. Explicit content gate (blur/lock unless logged in)
+1. Buat komponen `LazyImage` di `src/frontend/src/components/LazyImage.tsx`
+   - Gunakan IntersectionObserver dengan rootMargin "200px" agar gambar dimuat sebelum masuk viewport
+   - Tampilkan Skeleton selama gambar belum dimuat
+   - Saat gambar selesai load (onLoad), hilangkan skeleton dengan fade-in
+2. Update ReaderPage.tsx:
+   - Mode vertikal: ganti `<img>` dengan `<LazyImage>`
+   - Mode horizontal: tambah useEffect untuk preload gambar currentPage+1 dan currentPage+2
 
 ## UX Notes
-- MangaRead-inspired dark theme (dark navy/black background, white text, accent orange/red)
-- Comic covers displayed in portrait grid cards
-- Reader: horizontal mode uses left/right arrow keys + swipe; vertical mode is continuous scroll
-- Admin grabber: URL template input + range input (e.g. 1-50), progress feedback while fetching
-- Sorting options: Terbaru Diupdate, Terpopuler, A-Z
-- Mobile-friendly responsive layout
+- Skeleton harus memiliki aspect ratio yang mirip gambar komik (2/3 portrait)
+- Fade-in saat gambar muncul agar terasa halus
+- Di mode horizontal, preload dilakukan di background (Image object), bukan render di DOM

@@ -7,13 +7,12 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export type Time = bigint;
-export interface Page {
-    id: bigint;
-    pageNumber: bigint;
-    chapterId: bigint;
-    blobId: string;
+export interface TransformationOutput {
+    status: bigint;
+    body: Uint8Array;
+    headers: Array<http_header>;
 }
+export type Time = bigint;
 export interface Comment {
     id: bigint;
     username: string;
@@ -21,6 +20,28 @@ export interface Comment {
     createdAt: Time;
     text: string;
     comicId: bigint;
+}
+export interface Chapter {
+    id: bigint;
+    title: string;
+    chapterNumber: number;
+    createdAt: Time;
+    comicId: bigint;
+}
+export interface http_header {
+    value: string;
+    name: string;
+}
+export interface http_request_result {
+    status: bigint;
+    body: Uint8Array;
+    headers: Array<http_header>;
+}
+export interface Page {
+    id: bigint;
+    pageNumber: bigint;
+    chapterId: bigint;
+    blobId: string;
 }
 export interface Comic {
     id: bigint;
@@ -35,12 +56,9 @@ export interface Comic {
     genres: Array<string>;
     isExplicit: boolean;
 }
-export interface Chapter {
-    id: bigint;
-    title: string;
-    chapterNumber: number;
-    createdAt: Time;
-    comicId: bigint;
+export interface TransformationInput {
+    context: Uint8Array;
+    response: http_request_result;
 }
 export interface UserProfile {
     name: string;
@@ -51,7 +69,7 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    addComment(comicId: bigint, _username: string, text: string): Promise<void>;
+    addComment(comicId: bigint, username: string, text: string): Promise<void>;
     addPage(chapterId: bigint, pageNumber: bigint, blobId: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createChapter(comicId: bigint, chapterNumber: number, title: string): Promise<bigint>;
@@ -68,11 +86,13 @@ export interface backendInterface {
     importFromMangaDex(mangadexId: string): Promise<bigint>;
     incrementViewCount(comicId: bigint): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
+    listAllGenres(): Promise<Array<string>>;
     listChaptersByComic(comicId: bigint): Promise<Array<Chapter>>;
     listComics(page: bigint, pageSize: bigint, sortBy: string): Promise<Array<Comic>>;
     listCommentsByComic(comicId: bigint): Promise<Array<Comment>>;
     listPagesByChapter(chapterId: bigint): Promise<Array<Page>>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     searchComics(queryText: string, genre: string | null, status: string | null): Promise<Array<Comic>>;
+    transform(raw: TransformationInput): Promise<TransformationOutput>;
     updateComic(id: bigint, title: string, coverBlobId: string | null, genresInput: Array<string>, status: string, synopsis: string, sourceType: string, isExplicit: boolean): Promise<void>;
 }

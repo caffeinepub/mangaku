@@ -89,13 +89,12 @@ export class ExternalBlob {
         return this;
     }
 }
-export type Time = bigint;
-export interface Page {
-    id: bigint;
-    pageNumber: bigint;
-    chapterId: bigint;
-    blobId: string;
+export interface TransformationOutput {
+    status: bigint;
+    body: Uint8Array;
+    headers: Array<http_header>;
 }
+export type Time = bigint;
 export interface Comment {
     id: bigint;
     username: string;
@@ -106,6 +105,32 @@ export interface Comment {
 }
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
+}
+export interface _CaffeineStorageCreateCertificateResult {
+    method: string;
+    blob_hash: string;
+}
+export interface Chapter {
+    id: bigint;
+    title: string;
+    chapterNumber: number;
+    createdAt: Time;
+    comicId: bigint;
+}
+export interface http_header {
+    value: string;
+    name: string;
+}
+export interface http_request_result {
+    status: bigint;
+    body: Uint8Array;
+    headers: Array<http_header>;
+}
+export interface Page {
+    id: bigint;
+    pageNumber: bigint;
+    chapterId: bigint;
+    blobId: string;
 }
 export interface Comic {
     id: bigint;
@@ -120,23 +145,16 @@ export interface Comic {
     genres: Array<string>;
     isExplicit: boolean;
 }
-export interface _CaffeineStorageCreateCertificateResult {
-    method: string;
-    blob_hash: string;
-}
-export interface Chapter {
-    id: bigint;
-    title: string;
-    chapterNumber: number;
-    createdAt: Time;
-    comicId: bigint;
-}
-export interface UserProfile {
-    name: string;
+export interface TransformationInput {
+    context: Uint8Array;
+    response: http_request_result;
 }
 export interface _CaffeineStorageRefillResult {
     success?: boolean;
     topped_up_amount?: bigint;
+}
+export interface UserProfile {
+    name: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -151,7 +169,7 @@ export interface backendInterface {
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    addComment(comicId: bigint, _username: string, text: string): Promise<void>;
+    addComment(comicId: bigint, username: string, text: string): Promise<void>;
     addPage(chapterId: bigint, pageNumber: bigint, blobId: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createChapter(comicId: bigint, chapterNumber: number, title: string): Promise<bigint>;
@@ -168,12 +186,14 @@ export interface backendInterface {
     importFromMangaDex(mangadexId: string): Promise<bigint>;
     incrementViewCount(comicId: bigint): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
+    listAllGenres(): Promise<Array<string>>;
     listChaptersByComic(comicId: bigint): Promise<Array<Chapter>>;
     listComics(page: bigint, pageSize: bigint, sortBy: string): Promise<Array<Comic>>;
     listCommentsByComic(comicId: bigint): Promise<Array<Comment>>;
     listPagesByChapter(chapterId: bigint): Promise<Array<Page>>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     searchComics(queryText: string, genre: string | null, status: string | null): Promise<Array<Comic>>;
+    transform(raw: TransformationInput): Promise<TransformationOutput>;
     updateComic(id: bigint, title: string, coverBlobId: string | null, genresInput: Array<string>, status: string, synopsis: string, sourceType: string, isExplicit: boolean): Promise<void>;
 }
 import type { Comic as _Comic, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
@@ -515,6 +535,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async listAllGenres(): Promise<Array<string>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.listAllGenres();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.listAllGenres();
+            return result;
+        }
+    }
     async listChaptersByComic(arg0: bigint): Promise<Array<Chapter>> {
         if (this.processError) {
             try {
@@ -597,6 +631,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.searchComics(arg0, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2));
             return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async transform(arg0: TransformationInput): Promise<TransformationOutput> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.transform(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.transform(arg0);
+            return result;
         }
     }
     async updateComic(arg0: bigint, arg1: string, arg2: string | null, arg3: Array<string>, arg4: string, arg5: string, arg6: string, arg7: boolean): Promise<void> {

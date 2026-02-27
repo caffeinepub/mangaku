@@ -1,21 +1,24 @@
 import Map "mo:core/Map";
 import Set "mo:core/Set";
 import Nat "mo:core/Nat";
+import Nat32 "mo:core/Nat32";
 import Text "mo:core/Text";
+import List "mo:core/List";
+import Int "mo:core/Int";
+import Char "mo:core/Char";
 import Array "mo:core/Array";
-import Iter "mo:core/Iter";
-import Bool "mo:core/Bool";
 import Order "mo:core/Order";
 import Float "mo:core/Float";
 import Runtime "mo:core/Runtime";
+import Iter "mo:core/Iter";
 import Principal "mo:core/Principal";
 import Time "mo:core/Time";
-import AccessControl "authorization/access-control";
+
 import MixinAuthorization "authorization/MixinAuthorization";
-import ExternalBlob "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
+import AccessControl "authorization/access-control";
 import OutCall "http-outcalls/outcall";
-import Int "mo:core/Int";
+
 
 actor {
   // Initialize the access control system
@@ -116,6 +119,7 @@ actor {
   var pageIdCounter = 0;
   var commentIdCounter = 0;
 
+  // Helper function to check if an array has unique elements
   func isUniqueArray(array : [Text]) : Bool {
     let set = Set.empty<Text>();
     for (item in array.values()) {
@@ -127,6 +131,7 @@ actor {
     true;
   };
 
+  // Helper function to normalize titles
   func normalizeTitle(title : Text) : Text {
     title.trim(#char(' ')).toLower();
   };
@@ -253,7 +258,7 @@ actor {
     comic;
   };
 
-  // Public: Increment view count (anyone can view)
+  // Public: Increment view count (with explicit content check)
   public shared ({ caller }) func incrementViewCount(comicId : Nat) : async () {
     let comic = switch (comics.get(comicId)) {
       case (null) { Runtime.trap("Comic not found") };
@@ -387,7 +392,7 @@ actor {
   };
 
   // User-only: Add comment
-  public shared ({ caller }) func addComment(comicId : Nat, _username : Text, text : Text) : async () {
+  public shared ({ caller }) func addComment(comicId : Nat, username : Text, text : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only logged-in users can add comments");
     };
@@ -405,15 +410,27 @@ actor {
       id;
       comicId;
       userId = caller;
-      username = _username;
+      username;
       text;
       createdAt = now;
     };
     comments.add(id, comment);
   };
 
-  // Public: List comments (anyone can read)
+  // Public: List comments (with explicit content check)
   public query ({ caller }) func listCommentsByComic(comicId : Nat) : async [Comment] {
+    let comic = switch (comics.get(comicId)) {
+      case (null) { Runtime.trap("Comic not found") };
+      case (?comic) { comic };
+    };
+
+    // Check explicit content access - comments on explicit comics require login
+    if (comic.isExplicit) {
+      if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+        Runtime.trap("Unauthorized: Must be logged in to view comments on explicit content");
+      };
+    };
+
     let result = comments.values().toArray().filter(
       func(comment : Comment) : Bool {
         comment.comicId == comicId;
@@ -422,22 +439,27 @@ actor {
     result;
   };
 
-  // Admin-only: Delete comment
+  // Admin or owner: Delete comment
   public shared ({ caller }) func deleteComment(id : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete comments");
+    let comment = switch (comments.get(id)) {
+      case (null) { Runtime.trap("Comment not found") };
+      case (?comment) { comment };
     };
 
-    switch (comments.get(id)) {
-      case (null) { Runtime.trap("Comment not found") };
-      case (?_) {};
+    // Allow admins or the comment owner to delete
+    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
+    let isOwner = comment.userId == caller;
+
+    if (not (isAdmin or isOwner)) {
+      Runtime.trap("Unauthorized: Only admins or comment owners can delete comments");
     };
+
     comments.remove(id);
   };
 
   // Public: List all comics (with explicit content filtering)
   public query ({ caller }) func listComics(page : Nat, pageSize : Nat, sortBy : Text) : async [Comic] {
-    let userRole = AccessControl.getUserRole(accessControlState, caller);
+    let _ = AccessControl.getUserRole(accessControlState, caller);
     let isLoggedIn = AccessControl.hasPermission(accessControlState, caller, #user);
 
     let allComics = comics.values().toArray();
@@ -521,24 +543,233 @@ actor {
     );
   };
 
-  // Admin-only: Import from MangaDex
+  // Public: List all genres
+  public query func listAllGenres() : async [Text] {
+    genres.toArray();
+  };
+
+  // HTTP transform function for outcalls
+  public query func transform(raw : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+    { raw.response with headers = [] };
+  };
+
+  // Helper function to split text and get the first occurrence after a separator
+  func splitFirst(text : Text, sep : Text) : ?Text {
+    let parts = text.split(#text sep);
+    ignore parts.next(); // skip before-marker
+    switch (parts.next()) {
+      case (null) { null };
+      case (?after) {
+        switch (after.split(#text "\"").next()) {
+          case (null) { null };
+          case (?v) {
+            if (v.size() > 0) { ?v } else { null };
+          };
+        };
+      };
+    };
+  };
+
+  // Admin-only: Import from MangaDex (full implementation)
   public shared ({ caller }) func importFromMangaDex(mangadexId : Text) : async Nat {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can import from MangaDex");
     };
 
-    // Placeholder for HTTP outcall implementation
-    Runtime.trap("Not implemented: HTTP outcall to MangaDex API");
+    // Step 1: HTTP call to MangaDex
+    let url = "https://api.mangadex.org/manga/" # mangadexId # "?includes[]=cover_art";
+    let json = await OutCall.httpGetRequest(url, [], transform);
+
+    // Step 2: Extract title - try "en", then "ja-ro", then "ja"
+    let rawTitle = switch (splitFirst(json, "\"en\":\"")) {
+      case (?t) { t };
+      case (null) {
+        switch (splitFirst(json, "\"ja-ro\":\"")) {
+          case (?t) { t };
+          case (null) {
+            switch (splitFirst(json, "\"ja\":\"")) {
+              case (?t) { t };
+              case (null) { "Unknown Title" };
+            };
+          };
+        };
+      };
+    };
+
+    // Truncate title to max 100 chars
+    var titleChars = "";
+    var charCount = 0;
+    for (c in rawTitle.chars()) {
+      if (charCount < 100) { titleChars #= Text.fromChar(c); charCount += 1; };
+    };
+    let titleFinal = titleChars;
+
+    // Step 3: Extract status
+    let rawStatus = switch (splitFirst(json, "\"status\":\"")) { case (?s) { s }; case (null) { "ongoing" } };
+    let statusFinal = if (rawStatus == "completed") {
+      "completed";
+    } else if (rawStatus == "hiatus") {
+      "hiatus";
+    } else { "ongoing" };
+
+    // Step 4: Extract synopsis from description.en
+    let synopsisFinal = switch (splitFirst(json, "\"description\":{\"en\":\"")) {
+      case (?d) { d };
+      case (null) { "" };
+    };
+
+    // Step 5: Extract fileName for cover
+    let coverFinal : ?Text = switch (splitFirst(json, "\"fileName\":\"")) {
+      case (null) { null };
+      case (?fn) {
+        ?("https://uploads.mangadex.org/covers/" # mangadexId # "/" # fn);
+      };
+    };
+
+    // Step 6: Extract genres from tag names
+    let knownGenres = ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller", "Isekai", "Martial Arts"];
+    let genreSet = Set.empty<Text>();
+
+    // Split json by "\"name\":{\"en\":\"" to find tag names
+    let tagParts = json.split(#text "\"name\":{\"en\":\"");
+    ignore tagParts.next(); // skip before first
+    for (part in tagParts) {
+      switch (part.split(#text "\"").next()) {
+        case (null) {};
+        case (?tagName) {
+          for (kg in knownGenres.values()) {
+            if (tagName.toLower() == kg.toLower()) {
+              genreSet.add(kg);
+            };
+          };
+        };
+      };
+    };
+    let genresFinal = genreSet.toArray();
+
+    // Step 7: Handle duplicate title
+    let normalizedTitle = titleFinal.trim(#char(' ')).toLower();
+    let uniqueTitle = if (titles.contains(normalizedTitle)) {
+      // Take first 8 chars of mangadexId
+      var prefix = "";
+      var pCount = 0;
+      for (c in mangadexId.chars()) {
+        if (pCount < 8) { prefix #= Text.fromChar(c); pCount += 1; };
+      };
+      titleFinal # " [" # prefix # "]";
+    } else { titleFinal };
+
+    // Step 8: Create comic
+    comicIdCounter += 1;
+    let newId = comicIdCounter;
+    let now = Time.now();
+    let comic : Comic = {
+      id = newId;
+      title = uniqueTitle;
+      coverBlobId = coverFinal;
+      genres = genresFinal;
+      status = statusFinal;
+      synopsis = synopsisFinal;
+      sourceType = "mangadex";
+      isExplicit = false;
+      createdAt = now;
+      updatedAt = now;
+      viewCount = 0;
+    };
+    comics.add(newId, comic);
+    titles.add(uniqueTitle.trim(#char(' ')).toLower());
+    for (g in genresFinal.values()) { genres.add(g) };
+    newId;
   };
 
-  // Admin-only: Fetch MangaDex chapters
+  // Admin-only: Fetch MangaDex chapters (full implementation)
   public shared ({ caller }) func fetchMangaDexChapters(mangadexId : Text, comicId : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can fetch MangaDex chapters");
     };
 
-    // Placeholder for HTTP outcall implementation
-    Runtime.trap("Not implemented: HTTP outcall to MangaDex API");
+    // Verify comic exists
+    switch (comics.get(comicId)) {
+      case (null) { Runtime.trap("Comic not found") };
+      case (?_) {};
+    };
+
+    // HTTP GET request
+    let url = "https://api.mangadex.org/manga/" # mangadexId # "/feed?translatedLanguage[]=id&translatedLanguage[]=en&order[chapter]=asc&limit=500&offset=0";
+    let json = await OutCall.httpGetRequest(url, [], transform);
+
+    // Extract chapter numbers and titles
+    let chNumList = List.empty<Text>();
+    let chNumParts = json.split(#text "\"chapter\":\"");
+    ignore chNumParts.next();
+    for (part in chNumParts) {
+      switch (part.split(#text "\"").next()) {
+        case (null) {};
+        case (?v) { chNumList.add(v) };
+      };
+    };
+    let chNums = chNumList.toArray();
+
+    let chTitleList = List.empty<Text>();
+    let chTitleParts = json.split(#text "\"title\":\"");
+    ignore chTitleParts.next();
+    for (part in chTitleParts) {
+      switch (part.split(#text "\"").next()) {
+        case (null) {};
+        case (?v) { chTitleList.add(v) };
+      };
+    };
+    let chTitles = chTitleList.toArray();
+
+    // Collect existing chapter numbers for this comic
+    let existingNums = Set.empty<Float>();
+    for ((_, ch) in chapters.entries()) {
+      if (ch.comicId == comicId) { existingNums.add(ch.chapterNumber) };
+    };
+
+    // Parse float helper
+    func pf(s : Text) : Float {
+      if (s.size() == 0) { return 0.0 };
+      var intAcc : Nat = 0;
+      var fracAcc : Nat = 0;
+      var fracLen : Nat = 0;
+      var seenDot = false;
+      for (c in s.chars()) {
+        let code = c.toNat32();
+        if (code >= 48 and code <= 57) {
+          let digit = (code - 48).toNat();
+          if (seenDot) {
+            fracAcc := fracAcc * 10 + digit;
+            fracLen += 1;
+          } else {
+            intAcc := intAcc * 10 + digit;
+          };
+        } else if (c == '.') { seenDot := true };
+      };
+      var divisor : Float = 1.0;
+      var i = 0;
+      while (i < fracLen) {
+        divisor *= 10.0;
+        i += 1;
+      };
+      intAcc.toFloat() + fracAcc.toFloat() / divisor;
+    };
+
+    var seqNum : Float = 1.0;
+    var idx = 0;
+    for (numStr in chNums.values()) {
+      let chNum = if (numStr.size() == 0) { seqNum } else { pf(numStr) };
+      if (not existingNums.contains(chNum)) {
+        existingNums.add(chNum);
+        let chTitle = if (idx < chTitles.size()) { chTitles[idx] } else { "" };
+        chapterIdCounter += 1;
+        let chId = chapterIdCounter;
+        let now = Time.now();
+        chapters.add(chId, { id = chId; comicId; chapterNumber = chNum; title = chTitle; createdAt = now });
+      };
+      seqNum += 1.0;
+      idx += 1;
+    };
   };
 
   // Admin-only: Grab chapter pages
@@ -547,7 +778,37 @@ actor {
       Runtime.trap("Unauthorized: Only admins can grab chapter pages");
     };
 
-    // Placeholder for HTTP outcall implementation
-    Runtime.trap("Not implemented: HTTP outcall for page grabbing");
+    // Verify comic exists
+    switch (comics.get(comicId)) {
+      case (null) { Runtime.trap("Comic not found") };
+      case (?_) {};
+    };
+
+    // Verify chapter exists and belongs to the comic
+    let chapter = switch (chapters.get(chapterId)) {
+      case (null) { Runtime.trap("Chapter not found") };
+      case (?chapter) { chapter };
+    };
+
+    if (chapter.comicId != comicId) { Runtime.trap("Chapter does not belong to the specified comic") };
+
+    // Store page URLs (no HTTP requests, just store the URL pattern)
+    var pageNum = pageStart;
+    while (pageNum <= pageEnd) {
+      pageIdCounter += 1;
+      let pageId = pageIdCounter;
+      let blobId = urlTemplate # pageNum.toText() # ".jpg";
+
+      let page : Page = {
+        id = pageId;
+        chapterId;
+        pageNumber = pageNum;
+        blobId;
+      };
+      pages.add(pageId, page);
+
+      pageNum += 1;
+    };
   };
 };
+
