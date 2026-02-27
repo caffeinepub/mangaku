@@ -25,15 +25,14 @@ export const UserRole = IDL.Variant({
   'guest' : IDL.Null,
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
-export const Time = IDL.Int;
 export const Comic = IDL.Record({
   'id' : IDL.Nat,
   'status' : IDL.Text,
   'title' : IDL.Text,
-  'createdAt' : Time,
+  'createdAt' : IDL.Int,
   'coverBlobId' : IDL.Opt(IDL.Text),
   'sourceType' : IDL.Text,
-  'updatedAt' : Time,
+  'updatedAt' : IDL.Int,
   'synopsis' : IDL.Text,
   'viewCount' : IDL.Nat,
   'genres' : IDL.Vec(IDL.Text),
@@ -43,14 +42,15 @@ export const Chapter = IDL.Record({
   'id' : IDL.Nat,
   'title' : IDL.Text,
   'chapterNumber' : IDL.Float64,
-  'createdAt' : Time,
+  'createdAt' : IDL.Int,
   'comicId' : IDL.Nat,
+  'mangadexChapterId' : IDL.Opt(IDL.Text),
 });
 export const Comment = IDL.Record({
   'id' : IDL.Nat,
   'username' : IDL.Text,
   'userId' : IDL.Principal,
-  'createdAt' : Time,
+  'createdAt' : IDL.Int,
   'text' : IDL.Text,
   'comicId' : IDL.Nat,
 });
@@ -127,6 +127,7 @@ export const idlService = IDL.Service({
   'deleteChapter' : IDL.Func([IDL.Nat], [], []),
   'deleteComic' : IDL.Func([IDL.Nat], [], []),
   'deleteComment' : IDL.Func([IDL.Nat], [], []),
+  'fetchMangaDexChapterPages' : IDL.Func([IDL.Nat], [], []),
   'fetchMangaDexChapters' : IDL.Func([IDL.Text, IDL.Nat], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -200,15 +201,14 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
-  const Time = IDL.Int;
   const Comic = IDL.Record({
     'id' : IDL.Nat,
     'status' : IDL.Text,
     'title' : IDL.Text,
-    'createdAt' : Time,
+    'createdAt' : IDL.Int,
     'coverBlobId' : IDL.Opt(IDL.Text),
     'sourceType' : IDL.Text,
-    'updatedAt' : Time,
+    'updatedAt' : IDL.Int,
     'synopsis' : IDL.Text,
     'viewCount' : IDL.Nat,
     'genres' : IDL.Vec(IDL.Text),
@@ -218,14 +218,15 @@ export const idlFactory = ({ IDL }) => {
     'id' : IDL.Nat,
     'title' : IDL.Text,
     'chapterNumber' : IDL.Float64,
-    'createdAt' : Time,
+    'createdAt' : IDL.Int,
     'comicId' : IDL.Nat,
+    'mangadexChapterId' : IDL.Opt(IDL.Text),
   });
   const Comment = IDL.Record({
     'id' : IDL.Nat,
     'username' : IDL.Text,
     'userId' : IDL.Principal,
-    'createdAt' : Time,
+    'createdAt' : IDL.Int,
     'text' : IDL.Text,
     'comicId' : IDL.Nat,
   });
@@ -299,6 +300,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteChapter' : IDL.Func([IDL.Nat], [], []),
     'deleteComic' : IDL.Func([IDL.Nat], [], []),
     'deleteComment' : IDL.Func([IDL.Nat], [], []),
+    'fetchMangaDexChapterPages' : IDL.Func([IDL.Nat], [], []),
     'fetchMangaDexChapters' : IDL.Func([IDL.Text, IDL.Nat], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),

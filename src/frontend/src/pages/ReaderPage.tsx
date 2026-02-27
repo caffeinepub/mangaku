@@ -15,10 +15,16 @@ import { useListPages, useListChapters } from "../hooks/useQueries";
 import { ExternalBlob } from "../backend";
 
 function getPageUrl(blobId: string): string {
+  if (!blobId) return "";
+  // If it's already an external URL, use it directly
+  if (blobId.startsWith("http://") || blobId.startsWith("https://")) {
+    return blobId;
+  }
+  // Otherwise treat as Caffeine blob ID
   try {
     return ExternalBlob.fromURL(blobId).getDirectURL();
   } catch {
-    return "";
+    return blobId;
   }
 }
 
@@ -93,7 +99,7 @@ export function ReaderPage() {
   useEffect(() => {
     if (mode !== "horizontal") return;
     setImgLoading(true);
-  }, [currentPage, mode]);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Touch swipe
   const handleTouchStart = (e: React.TouchEvent) => {

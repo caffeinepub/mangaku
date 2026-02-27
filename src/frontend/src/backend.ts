@@ -89,39 +89,15 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface TransformationOutput {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Time = bigint;
-export interface Comment {
-    id: bigint;
-    username: string;
-    userId: Principal;
-    createdAt: Time;
-    text: string;
-    comicId: bigint;
-}
-export interface _CaffeineStorageRefillInformation {
-    proposed_top_up_amount?: bigint;
-}
-export interface _CaffeineStorageCreateCertificateResult {
-    method: string;
-    blob_hash: string;
-}
-export interface Chapter {
-    id: bigint;
-    title: string;
-    chapterNumber: number;
-    createdAt: Time;
-    comicId: bigint;
+export interface _CaffeineStorageRefillResult {
+    success?: boolean;
+    topped_up_amount?: bigint;
 }
 export interface http_header {
     value: string;
     name: string;
 }
-export interface http_request_result {
+export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
     headers: Array<http_header>;
@@ -132,29 +108,53 @@ export interface Page {
     chapterId: bigint;
     blobId: string;
 }
-export interface Comic {
+export interface Comment {
     id: bigint;
-    status: string;
-    title: string;
-    createdAt: Time;
-    coverBlobId?: string;
-    sourceType: string;
-    updatedAt: Time;
-    synopsis: string;
-    viewCount: bigint;
-    genres: Array<string>;
-    isExplicit: boolean;
+    username: string;
+    userId: Principal;
+    createdAt: bigint;
+    text: string;
+    comicId: bigint;
+}
+export interface _CaffeineStorageRefillInformation {
+    proposed_top_up_amount?: bigint;
 }
 export interface TransformationInput {
     context: Uint8Array;
     response: http_request_result;
 }
-export interface _CaffeineStorageRefillResult {
-    success?: boolean;
-    topped_up_amount?: bigint;
+export interface Comic {
+    id: bigint;
+    status: string;
+    title: string;
+    createdAt: bigint;
+    coverBlobId?: string;
+    sourceType: string;
+    updatedAt: bigint;
+    synopsis: string;
+    viewCount: bigint;
+    genres: Array<string>;
+    isExplicit: boolean;
+}
+export interface _CaffeineStorageCreateCertificateResult {
+    method: string;
+    blob_hash: string;
+}
+export interface Chapter {
+    id: bigint;
+    title: string;
+    chapterNumber: number;
+    createdAt: bigint;
+    comicId: bigint;
+    mangadexChapterId?: string;
 }
 export interface UserProfile {
     name: string;
+}
+export interface http_request_result {
+    status: bigint;
+    body: Uint8Array;
+    headers: Array<http_header>;
 }
 export enum UserRole {
     admin = "admin",
@@ -177,6 +177,7 @@ export interface backendInterface {
     deleteChapter(id: bigint): Promise<void>;
     deleteComic(id: bigint): Promise<void>;
     deleteComment(id: bigint): Promise<void>;
+    fetchMangaDexChapterPages(chapterId: bigint): Promise<void>;
     fetchMangaDexChapters(mangadexId: string, comicId: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -196,7 +197,7 @@ export interface backendInterface {
     transform(raw: TransformationInput): Promise<TransformationOutput>;
     updateComic(id: bigint, title: string, coverBlobId: string | null, genresInput: Array<string>, status: string, synopsis: string, sourceType: string, isExplicit: boolean): Promise<void>;
 }
-import type { Comic as _Comic, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { Chapter as _Chapter, Comic as _Comic, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -409,6 +410,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async fetchMangaDexChapterPages(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.fetchMangaDexChapterPages(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.fetchMangaDexChapterPages(arg0);
+            return result;
+        }
+    }
     async fetchMangaDexChapters(arg0: string, arg1: bigint): Promise<void> {
         if (this.processError) {
             try {
@@ -553,28 +568,28 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.listChaptersByComic(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.listChaptersByComic(arg0);
-            return result;
-        }
-    }
-    async listComics(arg0: bigint, arg1: bigint, arg2: string): Promise<Array<Comic>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.listComics(arg0, arg1, arg2);
                 return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.listComics(arg0, arg1, arg2);
+            const result = await this.actor.listChaptersByComic(arg0);
             return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async listComics(arg0: bigint, arg1: bigint, arg2: string): Promise<Array<Comic>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.listComics(arg0, arg1, arg2);
+                return from_candid_vec_n20(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.listComics(arg0, arg1, arg2);
+            return from_candid_vec_n20(this._uploadFile, this._downloadFile, result);
         }
     }
     async listCommentsByComic(arg0: bigint): Promise<Array<Comment>> {
@@ -623,14 +638,14 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.searchComics(arg0, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2));
-                return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n20(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.searchComics(arg0, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2));
-            return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n20(this._uploadFile, this._downloadFile, result);
         }
     }
     async transform(arg0: TransformationInput): Promise<TransformationOutput> {
@@ -662,6 +677,9 @@ export class Backend implements backendInterface {
         }
     }
 }
+function from_candid_Chapter_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Chapter): Chapter {
+    return from_candid_record_n19(_uploadFile, _downloadFile, value);
+}
 function from_candid_Comic_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Comic): Comic {
     return from_candid_record_n15(_uploadFile, _downloadFile, value);
 }
@@ -687,10 +705,10 @@ function from_candid_record_n15(_uploadFile: (file: ExternalBlob) => Promise<Uin
     id: bigint;
     status: string;
     title: string;
-    createdAt: _Time;
+    createdAt: bigint;
     coverBlobId: [] | [string];
     sourceType: string;
-    updatedAt: _Time;
+    updatedAt: bigint;
     synopsis: string;
     viewCount: bigint;
     genres: Array<string>;
@@ -699,10 +717,10 @@ function from_candid_record_n15(_uploadFile: (file: ExternalBlob) => Promise<Uin
     id: bigint;
     status: string;
     title: string;
-    createdAt: Time;
+    createdAt: bigint;
     coverBlobId?: string;
     sourceType: string;
-    updatedAt: Time;
+    updatedAt: bigint;
     synopsis: string;
     viewCount: bigint;
     genres: Array<string>;
@@ -720,6 +738,30 @@ function from_candid_record_n15(_uploadFile: (file: ExternalBlob) => Promise<Uin
         viewCount: value.viewCount,
         genres: value.genres,
         isExplicit: value.isExplicit
+    };
+}
+function from_candid_record_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    id: bigint;
+    title: string;
+    chapterNumber: number;
+    createdAt: bigint;
+    comicId: bigint;
+    mangadexChapterId: [] | [string];
+}): {
+    id: bigint;
+    title: string;
+    chapterNumber: number;
+    createdAt: bigint;
+    comicId: bigint;
+    mangadexChapterId?: string;
+} {
+    return {
+        id: value.id,
+        title: value.title,
+        chapterNumber: value.chapterNumber,
+        createdAt: value.createdAt,
+        comicId: value.comicId,
+        mangadexChapterId: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.mangadexChapterId))
     };
 }
 function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -743,7 +785,10 @@ function from_candid_variant_n13(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): UserRole {
     return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
 }
-function from_candid_vec_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Comic>): Array<Comic> {
+function from_candid_vec_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Chapter>): Array<Chapter> {
+    return value.map((x)=>from_candid_Chapter_n18(_uploadFile, _downloadFile, x));
+}
+function from_candid_vec_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Comic>): Array<Comic> {
     return value.map((x)=>from_candid_Comic_n14(_uploadFile, _downloadFile, x));
 }
 function to_candid_UserRole_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {

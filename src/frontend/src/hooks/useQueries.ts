@@ -370,6 +370,20 @@ export function useGrabChapterPages() {
   });
 }
 
+export function useFetchMangaDexChapterPages() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (chapterId: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.fetchMangaDexChapterPages(chapterId);
+    },
+    onSuccess: (_data, chapterId) => {
+      void queryClient.invalidateQueries({ queryKey: ["pages", chapterId.toString()] });
+    },
+  });
+}
+
 export function useIncrementViewCount() {
   const { actor } = useActor();
   return useMutation({

@@ -1,25 +1,23 @@
 import Map "mo:core/Map";
 import Set "mo:core/Set";
 import Nat "mo:core/Nat";
-import Nat32 "mo:core/Nat32";
 import Text "mo:core/Text";
 import List "mo:core/List";
-import Int "mo:core/Int";
-import Char "mo:core/Char";
 import Array "mo:core/Array";
-import Order "mo:core/Order";
 import Float "mo:core/Float";
-import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
 import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
 import Time "mo:core/Time";
+import Char "mo:core/Char";
 
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
-import AccessControl "authorization/access-control";
 import OutCall "http-outcalls/outcall";
+import AccessControl "authorization/access-control";
+import Migration "migration";
 
-
+(with migration = Migration.run)
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -64,8 +62,8 @@ actor {
     synopsis : Text;
     sourceType : Text;
     isExplicit : Bool;
-    createdAt : Time.Time;
-    updatedAt : Time.Time;
+    createdAt : Int;
+    updatedAt : Int;
     viewCount : Nat;
   };
 
@@ -74,7 +72,8 @@ actor {
     comicId : Nat;
     chapterNumber : Float;
     title : Text;
-    createdAt : Time.Time;
+    createdAt : Int;
+    mangadexChapterId : ?Text;
   };
 
   public type Page = {
@@ -90,21 +89,7 @@ actor {
     userId : Principal;
     username : Text;
     text : Text;
-    createdAt : Time.Time;
-  };
-
-  module Comic {
-    public func compareByUpdatedAt(a : Comic, b : Comic) : Order.Order {
-      Int.compare(b.updatedAt, a.updatedAt);
-    };
-
-    public func compareByViewCount(a : Comic, b : Comic) : Order.Order {
-      Nat.compare(b.viewCount, a.viewCount);
-    };
-
-    public func compareByTitle(a : Comic, b : Comic) : Order.Order {
-      Text.compare(a.title, b.title);
-    };
+    createdAt : Int;
   };
 
   let comics = Map.empty<Nat, Comic>();
@@ -136,6 +121,12 @@ actor {
     title.trim(#char(' ')).toLower();
   };
 
+  func containsText(set : Set.Set<Text>, text : Text) : Bool {
+    set.values().any(
+      func(t) { Text.equal(t, text) }
+    );
+  };
+
   // Admin-only: Create comic
   public shared ({ caller }) func createComic(title : Text, coverBlobId : ?Text, genresInput : [Text], status : Text, synopsis : Text, sourceType : Text, isExplicit : Bool) : async Nat {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
@@ -147,7 +138,7 @@ actor {
     };
 
     let normalized = normalizeTitle(title);
-    if (titles.contains(normalized)) {
+    if (containsText(titles, normalized)) {
       Runtime.trap("Title must be unique");
     };
 
@@ -198,7 +189,7 @@ actor {
     };
 
     let normalized = normalizeTitle(title);
-    if (normalized != normalizeTitle(existing.title) and titles.contains(normalized)) {
+    if (normalized != normalizeTitle(existing.title) and containsText(titles, normalized)) {
       Runtime.trap("Title must be unique");
     };
 
@@ -300,6 +291,7 @@ actor {
       chapterNumber;
       title;
       createdAt = now;
+      mangadexChapterId = null;
     };
     chapters.add(id, chapter);
     id;
@@ -459,7 +451,6 @@ actor {
 
   // Public: List all comics (with explicit content filtering)
   public query ({ caller }) func listComics(page : Nat, pageSize : Nat, sortBy : Text) : async [Comic] {
-    let _ = AccessControl.getUserRole(accessControlState, caller);
     let isLoggedIn = AccessControl.hasPermission(accessControlState, caller, #user);
 
     let allComics = comics.values().toArray();
@@ -477,11 +468,23 @@ actor {
 
     // Sort comics
     let sortedComics = if (sortBy == "updated") {
-      filteredComics.sort(Comic.compareByUpdatedAt);
+      filteredComics.sort(
+        func(a, b) {
+          Int.compare(b.updatedAt, a.updatedAt);
+        }
+      );
     } else if (sortBy == "popular") {
-      filteredComics.sort(Comic.compareByViewCount);
+      filteredComics.sort(
+        func(a, b) {
+          Nat.compare(b.viewCount, a.viewCount);
+        }
+      );
     } else {
-      filteredComics.sort(Comic.compareByTitle);
+      filteredComics.sort(
+        func(a, b) {
+          Text.compare(a.title, b.title);
+        }
+      );
     };
 
     // Paginate
@@ -649,7 +652,7 @@ actor {
 
     // Step 7: Handle duplicate title
     let normalizedTitle = titleFinal.trim(#char(' ')).toLower();
-    let uniqueTitle = if (titles.contains(normalizedTitle)) {
+    let uniqueTitle = if (containsText(titles, normalizedTitle)) {
       // Take first 8 chars of mangadexId
       var prefix = "";
       var pCount = 0;
@@ -682,7 +685,7 @@ actor {
     newId;
   };
 
-  // Admin-only: Fetch MangaDex chapters (full implementation)
+  // Admin-only: Fetch MangaDex chapters (full implementation with UUID extraction)
   public shared ({ caller }) func fetchMangaDexChapters(mangadexId : Text, comicId : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can fetch MangaDex chapters");
@@ -698,7 +701,33 @@ actor {
     let url = "https://api.mangadex.org/manga/" # mangadexId # "/feed?translatedLanguage[]=id&translatedLanguage[]=en&order[chapter]=asc&limit=500&offset=0";
     let json = await OutCall.httpGetRequest(url, [], transform);
 
-    // Extract chapter numbers and titles
+    // Extract chapter UUIDs by splitting on ",\"type\":\"chapter\""
+    let chUuidList = List.empty<Text>();
+    let typeParts = json.split(#text ",\"type\":\"chapter\"");
+    ignore typeParts.next(); // skip first part (before any chapter)
+    
+    for (part in typeParts) {
+      // Look backwards for the last "\"id\":\"" in this part
+      let idParts = part.split(#text "\"id\":\"");
+      var lastUuid : ?Text = null;
+      for (idPart in idParts) {
+        switch (idPart.split(#text "\"").next()) {
+          case (null) {};
+          case (?uuid) {
+            if (uuid.size() > 0) {
+              lastUuid := ?uuid;
+            };
+          };
+        };
+      };
+      switch (lastUuid) {
+        case (null) {};
+        case (?uuid) { chUuidList.add(uuid) };
+      };
+    };
+    let chUuids = chUuidList.toArray();
+
+    // Extract chapter numbers
     let chNumList = List.empty<Text>();
     let chNumParts = json.split(#text "\"chapter\":\"");
     ignore chNumParts.next();
@@ -710,6 +739,7 @@ actor {
     };
     let chNums = chNumList.toArray();
 
+    // Extract chapter titles
     let chTitleList = List.empty<Text>();
     let chTitleParts = json.split(#text "\"title\":\"");
     ignore chTitleParts.next();
@@ -762,13 +792,102 @@ actor {
       if (not existingNums.contains(chNum)) {
         existingNums.add(chNum);
         let chTitle = if (idx < chTitles.size()) { chTitles[idx] } else { "" };
+        let chUuid = if (idx < chUuids.size()) { ?chUuids[idx] } else { null };
+        
         chapterIdCounter += 1;
         let chId = chapterIdCounter;
         let now = Time.now();
-        chapters.add(chId, { id = chId; comicId; chapterNumber = chNum; title = chTitle; createdAt = now });
+        chapters.add(chId, { 
+          id = chId; 
+          comicId; 
+          chapterNumber = chNum; 
+          title = chTitle; 
+          createdAt = now; 
+          mangadexChapterId = chUuid 
+        });
       };
       seqNum += 1.0;
       idx += 1;
+    };
+  };
+
+  // Admin-only: Fetch MangaDex chapter pages (full implementation)
+  public shared ({ caller }) func fetchMangaDexChapterPages(chapterId : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can fetch MangaDex chapter pages");
+    };
+
+    let chapter = switch (chapters.get(chapterId)) {
+      case (null) { Runtime.trap("Chapter not found") };
+      case (?ch) { ch };
+    };
+
+    let mangadexChapterId = switch (chapter.mangadexChapterId) {
+      case (null) { Runtime.trap("Chapter does not have a MangaDex ID") };
+      case (?id) { id };
+    };
+
+    let url = "https://api.mangadex.org/at-home/server/" # mangadexChapterId;
+    let json = await OutCall.httpGetRequest(url, [], transform);
+
+    let baseUrl = switch (splitFirst(json, "\"baseUrl\":\"")) {
+      case (null) { Runtime.trap("Base URL not found") };
+      case (?url) { url };
+    };
+
+    let hash = switch (splitFirst(json, "\"hash\":\"")) {
+      case (null) { Runtime.trap("Hash not found") };
+      case (?h) { h };
+    };
+
+    let data = switch (splitFirst(json, "\"data\":[")) {
+      case (null) { Runtime.trap("Data array not found") };
+      case (?d) { d };
+    };
+
+    // Parse page filenames
+    let filenames = List.empty<Text>();
+    let items = data.split(#text "\"");
+    ignore items.next();
+    for (item in items) {
+      switch (item.split(#text "\"").next()) {
+        case (null) {};
+        case (?filename) {
+          if (filename.size() > 0) {
+            filenames.add(filename);
+          };
+        };
+      };
+    };
+
+    // Delete existing pages for this chapter
+    let pagesToRemove = List.empty<Nat>();
+    for ((pageId, p) in pages.entries()) {
+      if (p.chapterId == chapterId) {
+        pagesToRemove.add(pageId);
+      };
+    };
+
+    for (pageId in pagesToRemove.values()) {
+      pages.remove(pageId);
+    };
+
+    // Add new pages with constructed URLs
+    var pageNumber = 1;
+    for (filename in filenames.values()) {
+      let blobId = baseUrl # "/data/" # hash # "/" # filename;
+      pageIdCounter += 1;
+      let pageId = pageIdCounter;
+
+      let page = {
+        id = pageId;
+        chapterId;
+        pageNumber;
+        blobId;
+      };
+      pages.add(pageId, page);
+
+      pageNumber += 1;
     };
   };
 
@@ -797,7 +916,11 @@ actor {
     while (pageNum <= pageEnd) {
       pageIdCounter += 1;
       let pageId = pageIdCounter;
-      let blobId = urlTemplate # pageNum.toText() # ".jpg";
+      let blobId = if (urlTemplate.contains(#text("{page}"))) {
+        urlTemplate.replace(#text("{page}"), pageNum.toText());
+      } else {
+        urlTemplate # pageNum.toText();
+      };
 
       let page : Page = {
         id = pageId;
@@ -811,4 +934,3 @@ actor {
     };
   };
 };
-

@@ -9,6 +9,9 @@ import {
   Search,
   ArrowDownToLine,
   BookOpen,
+  Images,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -50,12 +53,13 @@ import {
   useDeleteComic,
   useImportFromMangaDex,
   useFetchMangaDexChapters,
+  useFetchMangaDexChapterPages,
   useGrabChapterPages,
   useListChapters,
   useCreateChapter,
 } from "../hooks/useQueries";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import type { Comic } from "../backend.d";
+import type { Comic, Chapter } from "../backend.d";
 
 const GENRES_LIST = [
   "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror",
@@ -406,18 +410,86 @@ function DaftarKomikTab() {
   );
 }
 
+// ─── Chapter Pages Grab List ──────────────────────────────────────────────────
+
+interface ChapterGrabRowProps {
+  chapter: Chapter;
+  onGrab: (chapterId: bigint) => Promise<void>;
+  isGrabbing: boolean;
+  grabbed: boolean;
+  failed: boolean;
+}
+
+function ChapterGrabRow({ chapter, onGrab, isGrabbing, grabbed, failed }: ChapterGrabRowProps) {
+  const hasMangaDexId = !!chapter.mangadexChapterId;
+
+  return (
+    <div className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-secondary/60 transition-colors">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-xs font-mono text-muted-foreground w-12 shrink-0">
+          Ch.{chapter.chapterNumber}
+        </span>
+        {chapter.title ? (
+          <span className="text-sm text-foreground truncate">{chapter.title}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground/60 italic">Tanpa judul</span>
+        )}
+        {hasMangaDexId && (
+          <Badge className="bg-primary/20 text-primary border border-primary/30 text-[9px] px-1 py-0 shrink-0">
+            MDX
+          </Badge>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0 ml-3">
+        {grabbed && !isGrabbing && (
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+        )}
+        {failed && !isGrabbing && (
+          <XCircle className="h-4 w-4 text-destructive" />
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void onGrab(chapter.id)}
+          disabled={!hasMangaDexId || isGrabbing}
+          className={`h-7 text-xs ${
+            hasMangaDexId
+              ? "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+              : "border-border text-muted-foreground cursor-not-allowed opacity-50"
+          }`}
+        >
+          {isGrabbing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Images className="h-3 w-3" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Import MangaDex Tab ──────────────────────────────────────────────────────
 
 function ImportMangaDexTab() {
   const [mangadexInput, setMangadexInput] = useState("");
   const [importedComicId, setImportedComicId] = useState<bigint | null>(null);
   const [importedMangadexId, setImportedMangadexId] = useState<string>("");
+  const [chaptersFetched, setChaptersFetched] = useState(false);
+  const [grabbingChapterId, setGrabbingChapterId] = useState<bigint | null>(null);
+  const [grabbedIds, setGrabbedIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const importMutation = useImportFromMangaDex();
   const fetchChaptersMutation = useFetchMangaDexChapters();
+  const fetchPagesMutation = useFetchMangaDexChapterPages();
+
+  const { data: chapters = [], refetch: refetchChapters } = useListChapters(
+    chaptersFetched ? importedComicId : null,
+  );
 
   const extractMangaDexId = (input: string): string => {
-    // Try to extract ID from URL like https://mangadex.org/title/UUID or just UUID
     const match = input.match(
       /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
     );
@@ -434,6 +506,9 @@ function ImportMangaDexTab() {
       const comicId = await importMutation.mutateAsync(mangadexId);
       setImportedComicId(comicId);
       setImportedMangadexId(mangadexId);
+      setChaptersFetched(false);
+      setGrabbedIds(new Set());
+      setFailedIds(new Set());
       toast.success(`Komik berhasil diimport! ID: ${comicId.toString()}`);
     } catch (err) {
       toast.error(`Gagal import: ${err instanceof Error ? err.message : String(err)}`);
@@ -447,72 +522,233 @@ function ImportMangaDexTab() {
         mangadexId: importedMangadexId,
         comicId: importedComicId,
       });
+      setChaptersFetched(true);
+      await refetchChapters();
       toast.success("Chapter berhasil diambil dari MangaDex");
     } catch (err) {
       toast.error(`Gagal ambil chapter: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
+  const handleGrabChapterPages = async (chapterId: bigint) => {
+    const idStr = chapterId.toString();
+    setGrabbingChapterId(chapterId);
+    setFailedIds((prev) => { const next = new Set(prev); next.delete(idStr); return next; });
+    try {
+      await fetchPagesMutation.mutateAsync(chapterId);
+      setGrabbedIds((prev) => new Set(prev).add(idStr));
+      toast.success("Halaman berhasil diambil");
+    } catch (err) {
+      setFailedIds((prev) => new Set(prev).add(idStr));
+      toast.error(`Gagal grab halaman: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setGrabbingChapterId(null);
+    }
+  };
+
+  const handleGrabAll = async () => {
+    const eligible = chapters.filter((c) => !!c.mangadexChapterId);
+    if (eligible.length === 0) {
+      toast.error("Tidak ada chapter dengan MangaDex ID");
+      return;
+    }
+    setBatchProgress({ current: 0, total: eligible.length });
+    let done = 0;
+    for (const chapter of eligible) {
+      const idStr = chapter.id.toString();
+      setGrabbingChapterId(chapter.id);
+      setFailedIds((prev) => { const next = new Set(prev); next.delete(idStr); return next; });
+      try {
+        await fetchPagesMutation.mutateAsync(chapter.id);
+        setGrabbedIds((prev) => new Set(prev).add(idStr));
+      } catch {
+        setFailedIds((prev) => new Set(prev).add(idStr));
+      } finally {
+        done++;
+        setBatchProgress({ current: done, total: eligible.length });
+        setGrabbingChapterId(null);
+      }
+    }
+    toast.success(`Selesai! ${eligible.length} chapter diproses`);
+    setBatchProgress(null);
+  };
+
+  const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+  const eligibleCount = chapters.filter((c) => !!c.mangadexChapterId).length;
+  const batchPct = batchProgress
+    ? Math.round((batchProgress.current / batchProgress.total) * 100)
+    : 0;
+
   return (
     <div className="space-y-6">
+      {/* Step 1: Import */}
       <div className="p-4 rounded-lg bg-secondary border border-border">
-        <p className="text-sm text-muted-foreground mb-4">
-          Import komik dari MangaDex menggunakan ID atau URL. Metadata, cover, dan daftar chapter akan disimpan otomatis.
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs font-mono bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+            1
+          </span>
+          <p className="text-sm font-semibold text-foreground">Import Komik</p>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Import metadata, cover, dan informasi komik dari MangaDex.
         </p>
+        <div className="flex gap-2">
+          <Input
+            value={mangadexInput}
+            onChange={(e) => setMangadexInput(e.target.value)}
+            placeholder="https://mangadex.org/title/... atau UUID"
+            className="bg-background border-border text-foreground placeholder:text-muted-foreground flex-1"
+          />
+          <Button
+            onClick={() => void handleImport()}
+            disabled={importMutation.isPending || !mangadexInput.trim()}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+          >
+            {importMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1.5" />
+                Import
+              </>
+            )}
+          </Button>
+        </div>
+        {importedComicId && (
+          <p className="text-xs text-green-500 mt-2 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Komik diimport — Comic ID: {importedComicId.toString()}
+          </p>
+        )}
+      </div>
 
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-foreground">ID / URL MangaDex</Label>
-            <div className="flex gap-2">
-              <Input
-                value={mangadexInput}
-                onChange={(e) => setMangadexInput(e.target.value)}
-                placeholder="https://mangadex.org/title/... atau UUID"
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground flex-1"
-              />
+      {/* Step 2: Fetch Chapters */}
+      {importedComicId && (
+        <div className="p-4 rounded-lg bg-secondary border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-mono bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+              2
+            </span>
+            <p className="text-sm font-semibold text-foreground">Ambil Daftar Chapter</p>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Ambil semua chapter dari MangaDex dan simpan ke database.
+          </p>
+          <Button
+            onClick={() => void handleFetchChapters()}
+            disabled={fetchChaptersMutation.isPending}
+            variant="outline"
+            size="sm"
+            className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+          >
+            {fetchChaptersMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Ambil Chapter dari MangaDex
+          </Button>
+          {chaptersFetched && chapters.length > 0 && (
+            <p className="text-xs text-green-500 mt-2 flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              {chapters.length} chapter tersedia
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Step 3: Grab Pages */}
+      {chaptersFetched && sortedChapters.length > 0 && (
+        <div className="p-4 rounded-lg bg-secondary border border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                3
+              </span>
+              <p className="text-sm font-semibold text-foreground">Grab Halaman</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {eligibleCount} chapter siap di-grab
+              </span>
               <Button
-                onClick={() => void handleImport()}
-                disabled={importMutation.isPending || !mangadexInput.trim()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                size="sm"
+                onClick={() => void handleGrabAll()}
+                disabled={
+                  eligibleCount === 0 ||
+                  batchProgress !== null ||
+                  grabbingChapterId !== null
+                }
+                className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
               >
-                {importMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {batchProgress !== null ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    {batchProgress.current}/{batchProgress.total}
+                  </>
                 ) : (
                   <>
-                    <Download className="h-4 w-4 mr-1.5" />
-                    Import
+                    <Images className="h-3 w-3 mr-1" />
+                    Grab Semua Halaman
                   </>
                 )}
               </Button>
             </div>
           </div>
 
-          {importedComicId && (
-            <div className="p-3 rounded-lg bg-background border border-primary/30">
-              <p className="text-sm text-foreground font-semibold">
-                ✓ Komik berhasil diimport
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Comic ID: {importedComicId.toString()}
-              </p>
-              <Button
-                onClick={() => void handleFetchChapters()}
-                disabled={fetchChaptersMutation.isPending}
-                variant="outline"
-                size="sm"
-                className="mt-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-              >
-                {fetchChaptersMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <BookOpen className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Ambil Chapter dari MangaDex
-              </Button>
+          {/* Batch progress bar */}
+          {batchProgress !== null && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Memproses {batchProgress.current} / {batchProgress.total} chapter</span>
+                <span>{batchPct}%</span>
+              </div>
+              <Progress value={batchPct} className="h-1.5" />
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Klik tombol{" "}
+            <Images className="h-3 w-3 inline" />{" "}
+            untuk grab halaman per chapter, atau "Grab Semua Halaman" untuk sekaligus.
+            Chapter tanpa badge <span className="text-primary font-bold text-[10px]">MDX</span> tidak dapat di-grab.
+          </p>
+
+          {/* Chapter list */}
+          <div className="bg-background rounded-md border border-border overflow-hidden">
+            <div className="max-h-80 overflow-y-auto custom-scroll divide-y divide-border">
+              {sortedChapters.map((chapter) => (
+                <ChapterGrabRow
+                  key={chapter.id.toString()}
+                  chapter={chapter}
+                  onGrab={handleGrabChapterPages}
+                  isGrabbing={grabbingChapterId === chapter.id}
+                  grabbed={grabbedIds.has(chapter.id.toString())}
+                  failed={failedIds.has(chapter.id.toString())}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Summary */}
+          {(grabbedIds.size > 0 || failedIds.size > 0) && (
+            <div className="flex gap-4 text-xs">
+              {grabbedIds.size > 0 && (
+                <span className="flex items-center gap-1 text-green-500">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {grabbedIds.size} berhasil
+                </span>
+              )}
+              {failedIds.size > 0 && (
+                <span className="flex items-center gap-1 text-destructive">
+                  <XCircle className="h-3 w-3" />
+                  {failedIds.size} gagal
+                </span>
+              )}
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -545,6 +781,10 @@ function GrabberTab() {
     }
     if (!urlTemplate.includes("{ch}")) {
       toast.error("URL template harus mengandung {ch}");
+      return;
+    }
+    if (!urlTemplate.includes("{page}")) {
+      toast.error("URL template harus mengandung {page} sebagai placeholder nomor halaman");
       return;
     }
 
@@ -628,7 +868,14 @@ function GrabberTab() {
           <code className="bg-background px-1 py-0.5 rounded text-xs text-primary font-mono">
             {"{ch}"}
           </code>{" "}
-          sebagai placeholder chapter.
+          untuk chapter dan{" "}
+          <code className="bg-background px-1 py-0.5 rounded text-xs text-primary font-mono">
+            {"{page}"}
+          </code>{" "}
+          untuk nomor halaman. Contoh:{" "}
+          <code className="bg-background px-1 py-0.5 rounded text-xs text-muted-foreground font-mono">
+            https://example.com/chapter-{"{ch}"}/{"{page}"}.jpg
+          </code>
         </p>
 
         <div className="space-y-4">
@@ -655,11 +902,13 @@ function GrabberTab() {
             <Input
               value={urlTemplate}
               onChange={(e) => setUrlTemplate(e.target.value)}
-              placeholder="https://example.com/manga/chapter-{ch}/page.jpg"
+              placeholder="https://example.com/manga/chapter-{ch}/{page}.jpg"
               className="bg-background border-border text-foreground font-mono text-sm placeholder:text-muted-foreground"
             />
             <p className="text-xs text-muted-foreground">
-              Gunakan <code className="text-primary">{"{ch}"}</code> sebagai placeholder nomor chapter
+              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor chapter dan{" "}
+              <code className="text-primary">{"{page}"}</code> untuk nomor halaman.
+              Contoh: <code className="text-primary/70">https://example.com/chapter-{"{ch}"}/{"{page}"}.jpg</code>
             </p>
           </div>
 

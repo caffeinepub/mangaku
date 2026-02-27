@@ -14,17 +14,18 @@ export interface Chapter {
   'id' : bigint,
   'title' : string,
   'chapterNumber' : number,
-  'createdAt' : Time,
+  'createdAt' : bigint,
   'comicId' : bigint,
+  'mangadexChapterId' : [] | [string],
 }
 export interface Comic {
   'id' : bigint,
   'status' : string,
   'title' : string,
-  'createdAt' : Time,
+  'createdAt' : bigint,
   'coverBlobId' : [] | [string],
   'sourceType' : string,
-  'updatedAt' : Time,
+  'updatedAt' : bigint,
   'synopsis' : string,
   'viewCount' : bigint,
   'genres' : Array<string>,
@@ -34,7 +35,7 @@ export interface Comment {
   'id' : bigint,
   'username' : string,
   'userId' : Principal,
-  'createdAt' : Time,
+  'createdAt' : bigint,
   'text' : string,
   'comicId' : bigint,
 }
@@ -44,7 +45,6 @@ export interface Page {
   'chapterId' : bigint,
   'blobId' : string,
 }
-export type Time = bigint;
 export interface TransformationInput {
   'context' : Uint8Array,
   'response' : http_request_result,
@@ -103,6 +103,7 @@ export interface _SERVICE {
   'deleteChapter' : ActorMethod<[bigint], undefined>,
   'deleteComic' : ActorMethod<[bigint], undefined>,
   'deleteComment' : ActorMethod<[bigint], undefined>,
+  'fetchMangaDexChapterPages' : ActorMethod<[bigint], undefined>,
   'fetchMangaDexChapters' : ActorMethod<[string, bigint], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
