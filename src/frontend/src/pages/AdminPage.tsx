@@ -61,6 +61,7 @@ import {
   useCreateChapter,
 } from "../hooks/useQueries";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useActor } from "../hooks/useActor";
 import type { Comic, Chapter } from "../backend.d";
 
 const GENRES_LIST = [
@@ -1003,8 +1004,13 @@ function GrabberTab() {
 function TambahManualTab() {
   const createComic = useCreateComic();
   const navigate = useNavigate();
+  const { actor, isFetching: actorFetching } = useActor();
 
   const handleCreate = async (data: ComicFormData) => {
+    if (!actor) {
+      toast.error("Backend belum siap, coba lagi sebentar");
+      return;
+    }
     try {
       const id = await createComic.mutateAsync({
         title: data.title,
@@ -1021,6 +1027,15 @@ function TambahManualTab() {
       toast.error(`Gagal membuat komik: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+
+  if (actorFetching) {
+    return (
+      <div className="p-4 rounded-lg bg-secondary border border-border flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 text-primary animate-spin mr-2" />
+        <span className="text-sm text-muted-foreground">Menghubungkan ke backend...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 rounded-lg bg-secondary border border-border">
@@ -1256,18 +1271,32 @@ export function AdminPage() {
   const navigate = useNavigate();
   const { identity } = useInternetIdentity();
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const { actor, isFetching: actorFetching } = useActor();
 
-  // Redirect non-admins
-  if (!adminLoading && (!identity || !isAdmin)) {
+  // Redirect if not logged in
+  if (!identity) {
     void navigate({ to: "/" });
     return null;
   }
 
-  if (adminLoading) {
+  if (adminLoading || actorFetching) {
     return (
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            {actorFetching ? "Menghubungkan ke backend..." : "Memuat data admin..."}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!actor) {
+    return (
+      <main className="container mx-auto px-4 py-8">
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <p className="text-sm text-destructive">Gagal terhubung ke backend. Coba refresh halaman.</p>
         </div>
       </main>
     );

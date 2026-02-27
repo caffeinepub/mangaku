@@ -160,7 +160,7 @@ export function useAddComment() {
       username: string;
       text: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.addComment(comicId, username, text);
     },
     onSuccess: (_data, { comicId }) => {
@@ -176,7 +176,7 @@ export function useDeleteComment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: bigint) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.deleteComment(id);
     },
     onSuccess: () => {
@@ -186,7 +186,7 @@ export function useDeleteComment() {
 }
 
 export function useCreateComic() {
-  const { actor } = useActor();
+  const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: {
@@ -198,7 +198,7 @@ export function useCreateComic() {
       sourceType: string;
       isExplicit: boolean;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor || isFetching) throw new Error("Backend belum siap, coba lagi");
       return actor.createComic(
         params.title,
         params.coverBlobId,
@@ -229,7 +229,7 @@ export function useUpdateComic() {
       sourceType: string;
       isExplicit: boolean;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.updateComic(
         params.id,
         params.title,
@@ -253,7 +253,7 @@ export function useDeleteComic() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: bigint) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.deleteComic(id);
     },
     onSuccess: () => {
@@ -271,7 +271,7 @@ export function useCreateChapter() {
       chapterNumber: number;
       title: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.createChapter(
         params.comicId,
         params.chapterNumber,
@@ -297,7 +297,7 @@ export function useDeleteChapter() {
       chapterId: bigint;
       comicId: bigint;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.deleteChapter(chapterId);
     },
     onSuccess: (_data, { comicId }) => {
@@ -313,7 +313,7 @@ export function useImportFromMangaDex() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (mangadexId: string) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.importFromMangaDex(mangadexId);
     },
     onSuccess: () => {
@@ -333,7 +333,7 @@ export function useFetchMangaDexChapters() {
       mangadexId: string;
       comicId: bigint;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.fetchMangaDexChapters(mangadexId, comicId);
     },
     onSuccess: () => {
@@ -353,7 +353,7 @@ export function useGrabChapterPages() {
       pageStart: bigint;
       pageEnd: bigint;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.grabChapterPages(
         params.comicId,
         params.chapterId,
@@ -375,7 +375,7 @@ export function useFetchMangaDexChapterPages() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (chapterId: bigint) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.fetchMangaDexChapterPages(chapterId);
     },
     onSuccess: (_data, chapterId) => {
@@ -393,7 +393,7 @@ export function useGrabChapterPagesViaSupadata() {
       chapterId: bigint;
       chapterUrl: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.grabChapterPagesViaSupadata(
         params.comicId,
         params.chapterId,
@@ -412,7 +412,7 @@ export function useIncrementViewCount() {
   const { actor } = useActor();
   return useMutation({
     mutationFn: async (comicId: bigint) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.incrementViewCount(comicId);
     },
   });
@@ -423,7 +423,7 @@ export function useSaveUserProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (profile: UserProfile) => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
       return actor.saveCallerUserProfile(profile);
     },
     onSuccess: () => {

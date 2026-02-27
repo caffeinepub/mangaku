@@ -14,6 +14,8 @@ export function Navbar() {
   const { identity, clear, login, isLoggingIn } = useInternetIdentity();
   const isAuthenticated = !!identity;
   const { data: isAdmin } = useIsAdmin();
+  // Show admin button to any logged-in user (backend enforces actual admin check)
+  const showAdmin = isAuthenticated;
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -79,7 +81,7 @@ export function Navbar() {
               >
                 Cari
               </Link>
-              {isAdmin && (
+              {showAdmin && (
                 <Link to="/admin">
                   <Button
                     variant="outline"
@@ -155,7 +157,7 @@ export function Navbar() {
               >
                 Cari Komik
               </Link>
-              {isAdmin && (
+              {showAdmin && (
                 <Link
                   to="/admin"
                   onClick={() => setMobileOpen(false)}
