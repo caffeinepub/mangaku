@@ -47,12 +47,12 @@ export function ComicCard({ comic }: ComicCardProps) {
                 18+
               </Badge>
             )}
-            {comic.status === "Ongoing" && (
+            {comic.status.toLowerCase() === "ongoing" && (
               <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 font-mono">
                 ONGOING
               </Badge>
             )}
-            {comic.status === "Completed" && (
+            {comic.status.toLowerCase() === "completed" && (
               <Badge className="bg-secondary text-muted-foreground text-[10px] px-1.5 py-0.5 font-mono">
                 DONE
               </Badge>

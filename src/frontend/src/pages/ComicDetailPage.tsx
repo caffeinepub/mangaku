@@ -157,12 +157,12 @@ export function ComicDetailPage() {
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge
                   className={
-                    comic.status === "Ongoing"
+                    comic.status.toLowerCase() === "ongoing"
                       ? "bg-primary text-primary-foreground"
                       : "bg-secondary text-muted-foreground"
                   }
                 >
-                  {comic.status}
+                  {comic.status.charAt(0).toUpperCase() + comic.status.slice(1)}
                 </Badge>
                 {comic.isExplicit && (
                   <Badge className="bg-destructive text-destructive-foreground">

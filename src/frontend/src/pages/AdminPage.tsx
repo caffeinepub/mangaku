@@ -85,7 +85,7 @@ interface ComicFormData {
 const EMPTY_FORM: ComicFormData = {
   title: "",
   genres: [],
-  status: "Ongoing",
+  status: "ongoing",
   synopsis: "",
   isExplicit: false,
   coverUrl: "",
@@ -156,9 +156,9 @@ function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
-              <SelectItem value="Ongoing">Ongoing</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="Hiatus">Hiatus</SelectItem>
+              <SelectItem value="ongoing">Ongoing</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="hiatus">Hiatus</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -270,7 +270,7 @@ function DaftarKomikTab() {
         title: data.title,
         coverBlobId: data.coverUrl || null,
         genres: data.genres,
-        status: data.status,
+        status: data.status.toLowerCase(),
         synopsis: data.synopsis,
         sourceType: data.sourceType,
         isExplicit: data.isExplicit,
@@ -329,12 +329,12 @@ function DaftarKomikTab() {
                     <Badge
                       variant="outline"
                       className={`text-xs ${
-                        comic.status === "Ongoing"
+                        comic.status.toLowerCase() === "ongoing"
                           ? "border-primary text-primary"
                           : "border-muted-foreground text-muted-foreground"
                       }`}
                     >
-                      {comic.status}
+                      {comic.status.charAt(0).toUpperCase() + comic.status.slice(1)}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
@@ -1016,7 +1016,7 @@ function TambahManualTab() {
         title: data.title,
         coverBlobId: data.coverUrl || null,
         genres: data.genres,
-        status: data.status,
+        status: data.status.toLowerCase(),
         synopsis: data.synopsis,
         sourceType: data.sourceType,
         isExplicit: data.isExplicit,
