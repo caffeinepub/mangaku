@@ -84,6 +84,7 @@ export interface backendInterface {
     getComic(id: bigint): Promise<Comic>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     grabChapterPages(comicId: bigint, chapterId: bigint, urlTemplate: string, pageStart: bigint, pageEnd: bigint): Promise<void>;
+    grabChapterPagesViaSupadata(comicId: bigint, chapterId: bigint, chapterUrl: string): Promise<void>;
     importFromMangaDex(mangadexId: string): Promise<bigint>;
     incrementViewCount(comicId: bigint): Promise<void>;
     isCallerAdmin(): Promise<boolean>;

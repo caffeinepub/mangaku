@@ -184,6 +184,7 @@ export interface backendInterface {
     getComic(id: bigint): Promise<Comic>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     grabChapterPages(comicId: bigint, chapterId: bigint, urlTemplate: string, pageStart: bigint, pageEnd: bigint): Promise<void>;
+    grabChapterPagesViaSupadata(comicId: bigint, chapterId: bigint, chapterUrl: string): Promise<void>;
     importFromMangaDex(mangadexId: string): Promise<bigint>;
     incrementViewCount(comicId: bigint): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
@@ -505,6 +506,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.grabChapterPages(arg0, arg1, arg2, arg3, arg4);
+            return result;
+        }
+    }
+    async grabChapterPagesViaSupadata(arg0: bigint, arg1: bigint, arg2: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.grabChapterPagesViaSupadata(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.grabChapterPagesViaSupadata(arg0, arg1, arg2);
             return result;
         }
     }

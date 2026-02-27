@@ -142,6 +142,11 @@ export const idlService = IDL.Service({
       [],
       [],
     ),
+  'grabChapterPagesViaSupadata' : IDL.Func(
+      [IDL.Nat, IDL.Nat, IDL.Text],
+      [],
+      [],
+    ),
   'importFromMangaDex' : IDL.Func([IDL.Text], [IDL.Nat], []),
   'incrementViewCount' : IDL.Func([IDL.Nat], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
@@ -312,6 +317,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'grabChapterPages' : IDL.Func(
         [IDL.Nat, IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat],
+        [],
+        [],
+      ),
+    'grabChapterPagesViaSupadata' : IDL.Func(
+        [IDL.Nat, IDL.Nat, IDL.Text],
         [],
         [],
       ),

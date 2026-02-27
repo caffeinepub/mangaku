@@ -12,6 +12,7 @@ import {
   Images,
   CheckCircle2,
   XCircle,
+  Globe,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import {
   useFetchMangaDexChapters,
   useFetchMangaDexChapterPages,
   useGrabChapterPages,
+  useGrabChapterPagesViaSupadata,
   useListChapters,
   useCreateChapter,
 } from "../hooks/useQueries";
@@ -1050,6 +1052,223 @@ function TambahManualTab() {
   );
 }
 
+// ─── Supadata Scraper Tab ─────────────────────────────────────────────────────
+
+function SupadataScraperTab() {
+  const { data: comics = [] } = useListComics(BigInt(0), BigInt(100), "latest");
+  const [selectedComicId, setSelectedComicId] = useState<string>("");
+  const [urlTemplate, setUrlTemplate] = useState("");
+  const [chapterFrom, setChapterFrom] = useState("1");
+  const [chapterTo, setChapterTo] = useState("1");
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [scrapeLog, setScrapeLog] = useState<{ id: number; text: string }[]>([]);
+
+  const scrapeMutation = useGrabChapterPagesViaSupadata();
+  const createChapterMutation = useCreateChapter();
+
+  const selectedComic = comics.find((c) => c.id.toString() === selectedComicId);
+  const { data: existingChapters = [] } = useListChapters(
+    selectedComicId ? BigInt(selectedComicId) : null,
+  );
+
+  const handleScrape = async () => {
+    if (!selectedComicId) {
+      toast.error("Pilih komik terlebih dahulu");
+      return;
+    }
+    if (!urlTemplate.includes("{ch}")) {
+      toast.error("URL template harus mengandung {ch}");
+      return;
+    }
+
+    const from = parseInt(chapterFrom, 10);
+    const to = parseInt(chapterTo, 10);
+
+    if (isNaN(from) || isNaN(to) || from > to) {
+      toast.error("Range chapter tidak valid");
+      return;
+    }
+
+    const comicId = BigInt(selectedComicId);
+    const total = to - from + 1;
+    setProgress({ current: 0, total });
+    setScrapeLog([]);
+    let logId = 0;
+    const addLog = (text: string) => {
+      const id = logId++;
+      setScrapeLog((prev) => [...prev, { id, text }]);
+    };
+
+    for (let ch = from; ch <= to; ch++) {
+      const resolvedUrl = urlTemplate.replace("{ch}", ch.toString());
+      addLog(`Memproses Chapter ${ch}...`);
+
+      // Check if chapter already exists
+      const existing = existingChapters.find((ec) => ec.chapterNumber === ch);
+      let chapterId: bigint;
+
+      if (existing) {
+        chapterId = existing.id;
+        addLog(`  → Chapter ${ch} sudah ada (ID: ${chapterId.toString()})`);
+      } else {
+        try {
+          chapterId = await createChapterMutation.mutateAsync({
+            comicId,
+            chapterNumber: ch,
+            title: "",
+          });
+          addLog(`  → Chapter ${ch} dibuat (ID: ${chapterId.toString()})`);
+        } catch (err) {
+          addLog(`  ✗ Gagal membuat chapter ${ch}: ${String(err)}`);
+          setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+          continue;
+        }
+      }
+
+      try {
+        await scrapeMutation.mutateAsync({
+          comicId,
+          chapterId,
+          chapterUrl: resolvedUrl,
+        });
+        addLog(`  ✓ Chapter ${ch} berhasil di-scrape via Supadata`);
+      } catch (err) {
+        addLog(`  ✗ Gagal scrape chapter ${ch}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+    }
+
+    setProgress((p) => (p ? { ...p, current: p.total } : null));
+    toast.success("Proses scraping selesai!");
+  };
+
+  const scrapePct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
+  const isScraping = scrapeMutation.isPending || createChapterMutation.isPending;
+
+  return (
+    <div className="space-y-5">
+      <div className="p-4 rounded-lg bg-secondary border border-border">
+        <p className="text-sm text-muted-foreground mb-4">
+          Ambil halaman komik menggunakan{" "}
+          <span className="text-primary font-semibold">Supadata Web Scraper</span>.
+          Masukkan URL template dengan{" "}
+          <code className="bg-background px-1 py-0.5 rounded text-xs text-primary font-mono">
+            {"{ch}"}
+          </code>{" "}
+          untuk nomor chapter. Supadata akan otomatis mendeteksi dan mengekstrak gambar dari halaman. Contoh:{" "}
+          <code className="bg-background px-1 py-0.5 rounded text-xs text-muted-foreground font-mono">
+            https://example.com/manga/chapter-{"{ch}"}/
+          </code>
+        </p>
+
+        <div className="space-y-4">
+          {/* Comic select */}
+          <div className="space-y-1.5">
+            <Label className="text-foreground">Pilih Komik</Label>
+            <Select value={selectedComicId} onValueChange={setSelectedComicId}>
+              <SelectTrigger className="bg-background border-border text-foreground">
+                <SelectValue placeholder="Pilih komik..." />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                {comics.map((c) => (
+                  <SelectItem key={c.id.toString()} value={c.id.toString()}>
+                    {c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* URL template */}
+          <div className="space-y-1.5">
+            <Label className="text-foreground">URL Template Chapter</Label>
+            <Input
+              value={urlTemplate}
+              onChange={(e) => setUrlTemplate(e.target.value)}
+              placeholder="https://example.com/manga/chapter-{ch}/"
+              className="bg-background border-border text-foreground font-mono text-sm placeholder:text-muted-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor chapter.
+              Supadata akan otomatis menemukan semua gambar di halaman tersebut.
+            </p>
+          </div>
+
+          {/* Chapter range */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-foreground">Dari Chapter</Label>
+              <Input
+                type="number"
+                min="1"
+                value={chapterFrom}
+                onChange={(e) => setChapterFrom(e.target.value)}
+                className="bg-background border-border text-foreground"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-foreground">Sampai Chapter</Label>
+              <Input
+                type="number"
+                min="1"
+                value={chapterTo}
+                onChange={(e) => setChapterTo(e.target.value)}
+                className="bg-background border-border text-foreground"
+              />
+            </div>
+          </div>
+
+          {/* Progress */}
+          {progress && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>
+                  Chapter {progress.current} / {progress.total}
+                </span>
+                <span>{scrapePct}%</span>
+              </div>
+              <Progress value={scrapePct} className="h-2" />
+            </div>
+          )}
+
+          {/* Log */}
+          {scrapeLog.length > 0 && (
+            <div className="bg-background rounded-md p-3 max-h-40 overflow-y-auto custom-scroll">
+              {scrapeLog.map((entry) => (
+                <p key={entry.id} className="text-xs font-mono text-muted-foreground">
+                  {entry.text}
+                </p>
+              ))}
+            </div>
+          )}
+
+          <Button
+            onClick={() => void handleScrape()}
+            disabled={isScraping || !selectedComicId || !urlTemplate}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground w-full"
+          >
+            {isScraping ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Globe className="h-4 w-4 mr-2" />
+            )}
+            Mulai Scrape
+          </Button>
+        </div>
+      </div>
+
+      {selectedComic && (
+        <div className="text-xs text-muted-foreground">
+          Komik dipilih:{" "}
+          <span className="text-foreground font-semibold">{selectedComic.title}</span> —{" "}
+          {existingChapters.length} chapter tersedia
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── AdminPage ────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -1108,6 +1327,13 @@ export function AdminPage() {
             Grabber
           </TabsTrigger>
           <TabsTrigger
+            value="supadata"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground text-xs"
+          >
+            <Globe className="h-3.5 w-3.5 mr-1.5" />
+            Supadata Scraper
+          </TabsTrigger>
+          <TabsTrigger
             value="manual"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground text-xs"
           >
@@ -1124,6 +1350,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="grabber">
           <GrabberTab />
+        </TabsContent>
+        <TabsContent value="supadata">
+          <SupadataScraperTab />
         </TabsContent>
         <TabsContent value="manual">
           <TambahManualTab />

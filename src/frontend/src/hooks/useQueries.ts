@@ -384,6 +384,30 @@ export function useFetchMangaDexChapterPages() {
   });
 }
 
+export function useGrabChapterPagesViaSupadata() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      comicId: bigint;
+      chapterId: bigint;
+      chapterUrl: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.grabChapterPagesViaSupadata(
+        params.comicId,
+        params.chapterId,
+        params.chapterUrl,
+      );
+    },
+    onSuccess: (_data, { chapterId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["pages", chapterId.toString()],
+      });
+    },
+  });
+}
+
 export function useIncrementViewCount() {
   const { actor } = useActor();
   return useMutation({

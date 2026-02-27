@@ -113,6 +113,10 @@ export interface _SERVICE {
     [bigint, bigint, string, bigint, bigint],
     undefined
   >,
+  'grabChapterPagesViaSupadata' : ActorMethod<
+    [bigint, bigint, string],
+    undefined
+  >,
   'importFromMangaDex' : ActorMethod<[string], bigint>,
   'incrementViewCount' : ActorMethod<[bigint], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,

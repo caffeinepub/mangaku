@@ -15,9 +15,7 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import OutCall "http-outcalls/outcall";
 import AccessControl "authorization/access-control";
-import Migration "migration";
 
-(with migration = Migration.run)
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -930,6 +928,118 @@ actor {
       };
       pages.add(pageId, page);
 
+      pageNum += 1;
+    };
+  };
+
+  // Admin-only: Grab chapter pages via Supadata
+  public shared ({ caller }) func grabChapterPagesViaSupadata(comicId : Nat, chapterId : Nat, chapterUrl : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can grab chapter pages via Supadata");
+    };
+
+    // Verify comic exists
+    switch (comics.get(comicId)) {
+      case (null) { Runtime.trap("Comic not found") };
+      case (?_) {};
+    };
+
+    // Verify chapter exists and belongs to the comic
+    let chapter = switch (chapters.get(chapterId)) {
+      case (null) { Runtime.trap("Chapter not found") };
+      case (?chapter) { chapter };
+    };
+
+    if (chapter.comicId != comicId) {
+      Runtime.trap("Chapter does not belong to the specified comic");
+    };
+
+    // POST request to Supadata API
+    let postBody = "{\"url\": \"" # chapterUrl # "\"}";
+    let headers = [
+      { name = "x-api-key"; value = "sd_ebc3b947dbf2c889f118481a5d38e284" },
+      { name = "Content-Type"; value = "application/json" },
+    ];
+    let json = await OutCall.httpPostRequest(
+      "https://api.supadata.ai/v1/web/scrape",
+      headers,
+      postBody,
+      transform
+    );
+
+    // Parse content field from response
+    let content = switch (splitFirst(json, "\"content\":\"")) {
+      case (null) { Runtime.trap("Content field not found") };
+      case (?c) { c };
+    };
+
+    // Extract image URLs from content
+    let imageUrls = List.empty<Text>();
+
+    // Helper function to check if a string contains any of the filter terms
+    func containsAny(text : Text, terms : [Text]) : Bool {
+      for (term in terms.values()) {
+        if (text.contains(#text term)) {
+          return true;
+        };
+      };
+      false;
+    };
+
+    let extensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+    let filters = ["logo", "icon", "avatar", "banner", "ads"];
+
+    // Split content by "<img" to find img tags
+    let imgParts = content.split(#text "<img");
+    ignore imgParts.next();
+    for (part in imgParts) {
+      switch (splitFirst(part, "src=\"")) {
+        case (null) {};
+        case (?afterSrc) {
+          // Find the ending quote for the URL
+          let urlEnd = switch (afterSrc.split(#text "\"").next()) {
+            case (null) { "" };
+            case (?end) { end };
+          };
+
+          // Check if the URL has a valid extension
+          let hasValidExt = extensions.values().any(
+            func(ext) { urlEnd.contains(#text ext) }
+          );
+
+          // Check for filters
+          let hasFilter = containsAny(urlEnd, filters);
+
+          // Only add URL if it has a valid extension and no filter term
+          if (hasValidExt and not hasFilter) {
+            imageUrls.add(urlEnd);
+          };
+        };
+      };
+    };
+
+    // Delete existing pages for this chapter
+    let pagesToRemove = List.empty<Nat>();
+    for ((pageId, p) in pages.entries()) {
+      if (p.chapterId == chapterId) {
+        pagesToRemove.add(pageId);
+      };
+    };
+    for (pageId in pagesToRemove.values()) {
+      pages.remove(pageId);
+    };
+
+    // Save each extracted image URL as a page entry
+    var pageNum = 1;
+    for (url in imageUrls.values()) {
+      pageIdCounter += 1;
+      let page : Page = {
+        id = pageIdCounter;
+        chapterId;
+        pageNumber = pageNum;
+        blobId = url;
+      };
+      pages.add(pageIdCounter, page);
       pageNum += 1;
     };
   };
