@@ -77,7 +77,7 @@ interface ComicFormData {
   status: string;
   synopsis: string;
   isExplicit: boolean;
-  coverBlobId: string | null;
+  coverUrl: string;
   sourceType: string;
 }
 
@@ -87,7 +87,7 @@ const EMPTY_FORM: ComicFormData = {
   status: "Ongoing",
   synopsis: "",
   isExplicit: false,
-  coverBlobId: null,
+  coverUrl: "",
   sourceType: "manual",
 };
 
@@ -98,7 +98,7 @@ function comicToForm(c: Comic): ComicFormData {
     status: c.status,
     synopsis: c.synopsis,
     isExplicit: c.isExplicit,
-    coverBlobId: c.coverBlobId ?? null,
+    coverUrl: c.coverBlobId ?? "",
     sourceType: c.sourceType,
   };
 }
@@ -112,7 +112,6 @@ interface ComicFormProps {
 
 function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }: ComicFormProps) {
   const [form, setForm] = useState<ComicFormData>(initial);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const handleGenreToggle = (genre: string) => {
     setForm((prev) => ({
@@ -121,32 +120,6 @@ function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }
         ? prev.genres.filter((g) => g !== genre)
         : [...prev.genres, genre],
     }));
-  };
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setUploadProgress(0);
-      // Create a data URL for preview/storage
-      // The actual blob storage integration happens when the comic is saved via the actor
-      // We store the file as a local object URL placeholder; in production use StorageClient
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      setUploadProgress(100);
-      // Store as data URL - the backend's createComic will use this as coverBlobId
-      setForm((prev) => ({ ...prev, coverBlobId: dataUrl }));
-      setUploadProgress(null);
-      toast.success("Cover berhasil dipilih");
-    } catch {
-      setUploadProgress(null);
-      toast.error("Gagal memproses cover");
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -222,20 +195,23 @@ function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }
       </div>
 
       <div className="space-y-2">
-        <Label className="text-foreground">Cover Image</Label>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => void handleCoverUpload(e)}
-          className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-secondary file:text-foreground hover:file:bg-accent"
+        <Label className="text-foreground">URL Cover Image</Label>
+        <Input
+          value={form.coverUrl}
+          onChange={(e) => setForm((p) => ({ ...p, coverUrl: e.target.value }))}
+          placeholder="https://example.com/cover.jpg"
+          className="bg-secondary border-border text-foreground"
         />
-        {uploadProgress !== null && (
-          <Progress value={uploadProgress} className="h-1.5" />
-        )}
-        {form.coverBlobId && (
-          <p className="text-xs text-muted-foreground truncate">
-            ✓ Cover tersimpan
-          </p>
+        {form.coverUrl && (
+          <div className="flex items-center gap-2 mt-1">
+            <img
+              src={form.coverUrl}
+              alt="Preview cover"
+              className="h-16 w-12 object-cover rounded border border-border"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            <p className="text-xs text-muted-foreground">Preview cover</p>
+          </div>
         )}
       </div>
 
@@ -290,8 +266,13 @@ function DaftarKomikTab() {
     try {
       await updateComic.mutateAsync({
         id: editComic.id,
-        ...data,
+        title: data.title,
+        coverBlobId: data.coverUrl || null,
         genres: data.genres,
+        status: data.status,
+        synopsis: data.synopsis,
+        sourceType: data.sourceType,
+        isExplicit: data.isExplicit,
       });
       toast.success("Komik berhasil diperbarui");
       setEditComic(null);
@@ -1027,7 +1008,7 @@ function TambahManualTab() {
     try {
       const id = await createComic.mutateAsync({
         title: data.title,
-        coverBlobId: data.coverBlobId,
+        coverBlobId: data.coverUrl || null,
         genres: data.genres,
         status: data.status,
         synopsis: data.synopsis,
