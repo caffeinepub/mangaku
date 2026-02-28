@@ -1,34 +1,34 @@
-import { useState, useEffect } from "react";
-import { useParams, Link } from "@tanstack/react-router";
-import {
-  BookOpen,
-  Eye,
-  Lock,
-  ChevronRight,
-  MessageSquare,
-  Loader2,
-  Trash2,
-} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { Link, useParams } from "@tanstack/react-router";
 import {
+  BookOpen,
+  ChevronRight,
+  Eye,
+  Loader2,
+  Lock,
+  MessageSquare,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ExternalBlob } from "../backend";
+import { LoginModal } from "../components/LoginModal";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import {
+  useAddComment,
+  useCallerUserProfile,
+  useDeleteComment,
   useGetComic,
+  useIncrementViewCount,
+  useIsAdmin,
   useListChapters,
   useListComments,
-  useAddComment,
-  useDeleteComment,
-  useIncrementViewCount,
-  useCallerUserProfile,
-  useIsAdmin,
 } from "../hooks/useQueries";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { ExternalBlob } from "../backend";
 import { PLACEHOLDER_COVER } from "../utils/blobUrl";
-import { LoginModal } from "../components/LoginModal";
 
 function getCoverUrl(blobId: string | undefined): string {
   if (!blobId) return PLACEHOLDER_COVER;
@@ -47,8 +47,10 @@ export function ComicDetailPage() {
   const isAuthenticated = !!identity;
 
   const { data: comic, isLoading: comicLoading } = useGetComic(comicId);
-  const { data: chapters = [], isLoading: chaptersLoading } = useListChapters(comicId);
-  const { data: comments = [], isLoading: commentsLoading } = useListComments(comicId);
+  const { data: chapters = [], isLoading: chaptersLoading } =
+    useListChapters(comicId);
+  const { data: comments = [], isLoading: commentsLoading } =
+    useListComments(comicId);
   const { data: userProfile } = useCallerUserProfile();
   const { data: isAdmin } = useIsAdmin();
 
@@ -83,13 +85,15 @@ export function ComicDetailPage() {
     if (!commentText.trim()) return;
 
     const username =
-      userProfile?.name ?? identity?.getPrincipal().toString().slice(0, 8) ?? "User";
+      userProfile?.name ??
+      identity?.getPrincipal().toString().slice(0, 8) ??
+      "User";
 
     try {
       await addComment.mutateAsync({ comicId, username, text: commentText });
       setCommentText("");
       toast.success("Komentar berhasil ditambahkan");
-    } catch (err) {
+    } catch {
       toast.error("Gagal menambahkan komentar");
     }
   };
@@ -169,7 +173,10 @@ export function ComicDetailPage() {
                     18+
                   </Badge>
                 )}
-                <Badge variant="outline" className="text-muted-foreground border-border">
+                <Badge
+                  variant="outline"
+                  className="text-muted-foreground border-border"
+                >
                   {comic.sourceType}
                 </Badge>
               </div>
@@ -212,7 +219,8 @@ export function ComicDetailPage() {
                 to="/comic/$id/chapter/$chapterId"
                 params={{
                   id: comic.id.toString(),
-                  chapterId: sortedChapters[sortedChapters.length - 1].id.toString(),
+                  chapterId:
+                    sortedChapters[sortedChapters.length - 1].id.toString(),
                 }}
               >
                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -254,7 +262,7 @@ export function ComicDetailPage() {
 
           {chaptersLoading ? (
             <div className="space-y-2">
-              {["c1","c2","c3","c4"].map((id) => (
+              {["c1", "c2", "c3", "c4"].map((id) => (
                 <Skeleton key={id} className="h-12 w-full" />
               ))}
             </div>
@@ -353,7 +361,7 @@ export function ComicDetailPage() {
           {/* Comments list */}
           {commentsLoading ? (
             <div className="space-y-3">
-              {["cm1","cm2","cm3"].map((id) => (
+              {["cm1", "cm2", "cm3"].map((id) => (
                 <Skeleton key={id} className="h-16 w-full" />
               ))}
             </div>
@@ -389,9 +397,7 @@ export function ComicDetailPage() {
                       {isAdmin && (
                         <button
                           type="button"
-                          onClick={() =>
-                            void handleDeleteComment(comment.id)
-                          }
+                          onClick={() => void handleDeleteComment(comment.id)}
                           className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                           title="Hapus komentar"
                         >

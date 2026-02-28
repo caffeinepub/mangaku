@@ -174,9 +174,12 @@ export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createChapter(comicId: bigint, chapterNumber: number, title: string): Promise<bigint>;
     createComic(title: string, coverBlobId: string | null, genresInput: Array<string>, status: string, synopsis: string, sourceType: string, isExplicit: boolean): Promise<bigint>;
+    deleteAllChapterPages(chapterId: bigint): Promise<void>;
     deleteChapter(id: bigint): Promise<void>;
     deleteComic(id: bigint): Promise<void>;
+    deleteComicCover(comicId: bigint): Promise<void>;
     deleteComment(id: bigint): Promise<void>;
+    deletePage(pageId: bigint): Promise<void>;
     fetchMangaDexChapterPages(chapterId: bigint): Promise<void>;
     fetchMangaDexChapters(mangadexId: string, comicId: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
@@ -369,6 +372,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async deleteAllChapterPages(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteAllChapterPages(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteAllChapterPages(arg0);
+            return result;
+        }
+    }
     async deleteChapter(arg0: bigint): Promise<void> {
         if (this.processError) {
             try {
@@ -397,6 +414,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async deleteComicCover(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteComicCover(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteComicCover(arg0);
+            return result;
+        }
+    }
     async deleteComment(arg0: bigint): Promise<void> {
         if (this.processError) {
             try {
@@ -408,6 +439,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.deleteComment(arg0);
+            return result;
+        }
+    }
+    async deletePage(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deletePage(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deletePage(arg0);
             return result;
         }
     }

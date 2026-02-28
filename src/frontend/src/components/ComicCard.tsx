@@ -1,9 +1,9 @@
-import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Link } from "@tanstack/react-router";
+import { ExternalBlob } from "../backend";
 import type { Comic } from "../backend.d";
 import { PLACEHOLDER_COVER } from "../utils/blobUrl";
-import { ExternalBlob } from "../backend";
 
 interface ComicCardProps {
   comic: Comic;

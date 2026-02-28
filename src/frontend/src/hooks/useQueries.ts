@@ -1,22 +1,18 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useActor } from "./useActor";
-import { useInternetIdentity } from "./useInternetIdentity";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  Comic,
   Chapter,
+  Comic,
   Comment,
   Page,
   UserProfile,
   UserRole,
 } from "../backend.d";
+import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
 
 // ─── Comic Queries ───────────────────────────────────────────────────────────
 
-export function useListComics(
-  page: bigint,
-  pageSize: bigint,
-  sortBy: string,
-) {
+export function useListComics(page: bigint, pageSize: bigint, sortBy: string) {
   const { actor, isFetching } = useActor();
   return useQuery<Comic[]>({
     queryKey: ["comics", page.toString(), pageSize.toString(), sortBy],
@@ -198,7 +194,8 @@ export function useCreateComic() {
       sourceType: string;
       isExplicit: boolean;
     }) => {
-      if (!actor || isFetching) throw new Error("Backend belum siap, coba lagi");
+      if (!actor || isFetching)
+        throw new Error("Backend belum siap, coba lagi");
       return actor.createComic(
         params.title,
         params.coverBlobId,
@@ -243,7 +240,9 @@ export function useUpdateComic() {
     },
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["comics"] });
-      void queryClient.invalidateQueries({ queryKey: ["comic", id.toString()] });
+      void queryClient.invalidateQueries({
+        queryKey: ["comic", id.toString()],
+      });
     },
   });
 }
@@ -292,7 +291,6 @@ export function useDeleteChapter() {
   return useMutation({
     mutationFn: async ({
       chapterId,
-      comicId,
     }: {
       chapterId: bigint;
       comicId: bigint;
@@ -379,7 +377,9 @@ export function useFetchMangaDexChapterPages() {
       return actor.fetchMangaDexChapterPages(chapterId);
     },
     onSuccess: (_data, chapterId) => {
-      void queryClient.invalidateQueries({ queryKey: ["pages", chapterId.toString()] });
+      void queryClient.invalidateQueries({
+        queryKey: ["pages", chapterId.toString()],
+      });
     },
   });
 }
@@ -428,6 +428,57 @@ export function useSaveUserProfile() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["currentUserProfile"] });
+    },
+  });
+}
+
+export function useDeleteComicCover() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (comicId: bigint) => {
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
+      return actor.deleteComicCover(comicId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["comics"] });
+    },
+  });
+}
+
+export function useDeleteAllChapterPages() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (chapterId: bigint) => {
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
+      return actor.deleteAllChapterPages(chapterId);
+    },
+    onSuccess: (_data, chapterId) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["pages", chapterId.toString()],
+      });
+    },
+  });
+}
+
+export function useDeletePage() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pageId,
+    }: {
+      pageId: bigint;
+      chapterId: bigint;
+    }) => {
+      if (!actor) throw new Error("Backend belum siap, coba lagi");
+      return actor.deletePage(pageId);
+    },
+    onSuccess: (_data, { chapterId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["pages", chapterId.toString()],
+      });
     },
   });
 }

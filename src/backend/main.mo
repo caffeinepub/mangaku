@@ -6,18 +6,21 @@ import List "mo:core/List";
 import Array "mo:core/Array";
 import Float "mo:core/Float";
 import Iter "mo:core/Iter";
+import Char "mo:core/Char";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
 import Time "mo:core/Time";
-import Char "mo:core/Char";
 
+import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import OutCall "http-outcalls/outcall";
-import AccessControl "authorization/access-control";
+import Migration "migration";
 
+// Apply data migration on upgrade
+(with migration = Migration.run)
 actor {
-  // Initialize the access control system
+  // Initialize access control system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
@@ -167,7 +170,7 @@ actor {
     };
 
     comics.add(id, comic);
-    titles.add(normalized);
+    titles.add(normalizeTitle(title));
     for (genre in genresInput.values()) {
       genres.add(genre);
     };
@@ -227,6 +230,57 @@ actor {
       case (?_) {};
     };
     comics.remove(id);
+  };
+
+  // Admin-only: Delete page by ID
+  public shared ({ caller }) func deletePage(pageId : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete pages");
+    };
+
+    switch (pages.get(pageId)) {
+      case (null) { Runtime.trap("Page not found") };
+      case (?_) {};
+    };
+    pages.remove(pageId);
+  };
+
+  // Admin-only: Delete all pages for a chapter
+  public shared ({ caller }) func deleteAllChapterPages(chapterId : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete chapter pages");
+    };
+
+    switch (chapters.get(chapterId)) {
+      case (null) { Runtime.trap("Chapter not found") };
+      case (?_) {};
+    };
+
+    let pagesToRemove = List.empty<Nat>();
+    for ((pageId, p) in pages.entries()) {
+      if (p.chapterId == chapterId) {
+        pagesToRemove.add(pageId);
+      };
+    };
+
+    for (pageId in pagesToRemove.values()) {
+      pages.remove(pageId);
+    };
+  };
+
+  // Admin-only: Delete comic cover
+  public shared ({ caller }) func deleteComicCover(comicId : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete comic covers");
+    };
+
+    let comic = switch (comics.get(comicId)) {
+      case (null) { Runtime.trap("Comic not found") };
+      case (?comic) { comic };
+    };
+
+    let updatedComic = { comic with coverBlobId = null };
+    comics.add(comicId, updatedComic);
   };
 
   // Public/User: Get comic (with explicit content filtering)
@@ -322,12 +376,11 @@ actor {
       };
     };
 
-    let result = chapters.values().toArray().filter(
+    chapters.values().toArray().filter(
       func(chapter : Chapter) : Bool {
         chapter.comicId == comicId;
       },
     );
-    result;
   };
 
   // Admin-only: Add page
@@ -373,12 +426,11 @@ actor {
       };
     };
 
-    let result = pages.values().toArray().filter(
+    pages.values().toArray().filter(
       func(page : Page) : Bool {
         page.chapterId == chapterId;
       },
     );
-    result;
   };
 
   // User-only: Add comment
@@ -421,12 +473,11 @@ actor {
       };
     };
 
-    let result = comments.values().toArray().filter(
+    comments.values().toArray().filter(
       func(comment : Comment) : Bool {
         comment.comicId == comicId;
       },
     );
-    result;
   };
 
   // Admin or owner: Delete comment
@@ -932,7 +983,7 @@ actor {
     };
   };
 
-  // Admin-only: Grab chapter pages via Supadata
+  // Admin-only: Grab chapter pages via Supadata (HTTP GET + Markdown)
   public shared ({ caller }) func grabChapterPagesViaSupadata(comicId : Nat, chapterId : Nat, chapterUrl : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can grab chapter pages via Supadata");
@@ -954,27 +1005,18 @@ actor {
       Runtime.trap("Chapter does not belong to the specified comic");
     };
 
-    // POST request to Supadata API
-    let postBody = "{\"url\": \"" # chapterUrl # "\"}";
+    // HTTP GET request to Supadata API
     let headers = [
-      { name = "x-api-key"; value = "sd_ebc3b947dbf2c889f118481a5d38e284" },
-      { name = "Content-Type"; value = "application/json" },
+      { name = "x-api-key"; value = "sd_ebc3b947dbf2c889f118481a5d38e284" }
     ];
-    let json = await OutCall.httpPostRequest(
-      "https://api.supadata.ai/v1/web/scrape",
-      headers,
-      postBody,
-      transform
-    );
+    let url = "https://api.supadata.ai/v1/web/scrape?url=" # chapterUrl;
+    let json = await OutCall.httpGetRequest(url, headers, transform);
 
     // Parse content field from response
     let content = switch (splitFirst(json, "\"content\":\"")) {
       case (null) { Runtime.trap("Content field not found") };
       case (?c) { c };
     };
-
-    // Extract image URLs from content
-    let imageUrls = List.empty<Text>();
 
     // Helper function to check if a string contains any of the filter terms
     func containsAny(text : Text, terms : [Text]) : Bool {
@@ -989,31 +1031,65 @@ actor {
     let extensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
     let filters = ["logo", "icon", "avatar", "banner", "ads"];
 
-    // Split content by "<img" to find img tags
-    let imgParts = content.split(#text "<img");
-    ignore imgParts.next();
-    for (part in imgParts) {
-      switch (splitFirst(part, "src=\"")) {
+    // Parse Markdown image syntax ![] from content
+    let imageUrls = List.empty<Text>();
+    let markdownParts = content.split(#text "![");
+
+    ignore markdownParts.next();
+    for (part in markdownParts) {
+      switch (splitFirst(part, "](")) {
         case (null) {};
-        case (?afterSrc) {
-          // Find the ending quote for the URL
-          let urlEnd = switch (afterSrc.split(#text "\"").next()) {
-            case (null) { "" };
-            case (?end) { end };
+        case (?afterBracket) {
+          // Find the closing parenthesis
+          switch (afterBracket.split(#text ")").next()) {
+            case (null) {};
+            case (?url) {
+              let hasValidExt = extensions.values().any(
+                func(ext) { url.contains(#text ext) }
+              );
+              let hasFilter = containsAny(url, filters);
+              if (hasValidExt and not hasFilter) {
+                imageUrls.add(url);
+              };
+            };
           };
+        };
+      };
+    };
 
-          // Check if the URL has a valid extension
-          let hasValidExt = extensions.values().any(
-            func(ext) { urlEnd.contains(#text ext) }
-          );
+    // If no images found with Markdown syntax, try URLs array from JSON
+    if (imageUrls.size() == 0) {
+      switch (splitFirst(json, "\"urls\":[")) {
+        case (null) {};
+        case (?urlsPart) {
+          let quotedStrings = urlsPart.split(#text "\"");
+          ignore quotedStrings.next(); // skip initial content
 
-          // Check for filters
-          let hasFilter = containsAny(urlEnd, filters);
-
-          // Only add URL if it has a valid extension and no filter term
-          if (hasValidExt and not hasFilter) {
-            imageUrls.add(urlEnd);
+          for (urlItem in quotedStrings) {
+            let hasValidExt = extensions.values().any(
+              func(ext) { urlItem.contains(#text ext) }
+            );
+            let hasFilter = containsAny(urlItem, filters);
+            if (hasValidExt and not hasFilter) {
+              imageUrls.add(urlItem);
+            };
           };
+        };
+      };
+    };
+
+    // If still no images, search for any bare HTTP URLs in the JSON data
+    if (imageUrls.size() == 0) {
+      let httpParts = json.split(#text "http");
+      ignore httpParts.next();
+      for (part in httpParts) {
+        let url = "http" # part;
+        let hasValidExt = extensions.values().any(
+          func(ext) { url.contains(#text ext) }
+        );
+        let hasFilter = containsAny(url, filters);
+        if (hasValidExt and not hasFilter and url.size() > 10) {
+          imageUrls.add(url);
         };
       };
     };
@@ -1044,3 +1120,4 @@ actor {
     };
   };
 };
+

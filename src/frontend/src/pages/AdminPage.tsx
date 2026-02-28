@@ -1,28 +1,24 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  Loader2,
-  Plus,
-  Trash2,
-  Edit,
-  Download,
-  Search,
-  ArrowDownToLine,
-  BookOpen,
-  Images,
-  CheckCircle2,
-  XCircle,
-  Globe,
-} from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -31,43 +27,71 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "@tanstack/react-router";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  ArrowDownToLine,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Edit,
+  ExternalLink,
+  Globe,
+  HardDrive,
+  ImageOff,
+  Images,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { ExternalBlob } from "../backend";
+import type { Chapter, Comic } from "../backend.d";
+import { useActor } from "../hooks/useActor";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
-  useListComics,
-  useIsAdmin,
+  useCreateChapter,
   useCreateComic,
-  useUpdateComic,
+  useDeleteAllChapterPages,
   useDeleteComic,
-  useImportFromMangaDex,
-  useFetchMangaDexChapters,
+  useDeleteComicCover,
+  useDeletePage,
   useFetchMangaDexChapterPages,
+  useFetchMangaDexChapters,
   useGrabChapterPages,
   useGrabChapterPagesViaSupadata,
+  useImportFromMangaDex,
+  useIsAdmin,
   useListChapters,
-  useCreateChapter,
+  useListComics,
+  useListPages,
+  useUpdateComic,
 } from "../hooks/useQueries";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useActor } from "../hooks/useActor";
-import type { Comic, Chapter } from "../backend.d";
+import { PLACEHOLDER_COVER } from "../utils/blobUrl";
 
 const GENRES_LIST = [
-  "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror",
-  "Mystery", "Romance", "Sci-Fi", "Slice of Life", "Sports",
-  "Supernatural", "Thriller", "Isekai", "Martial Arts",
+  "Action",
+  "Adventure",
+  "Comedy",
+  "Drama",
+  "Fantasy",
+  "Horror",
+  "Mystery",
+  "Romance",
+  "Sci-Fi",
+  "Slice of Life",
+  "Sports",
+  "Supernatural",
+  "Thriller",
+  "Isekai",
+  "Martial Arts",
 ];
 
 // ─── ComicForm Component ──────────────────────────────────────────────────────
@@ -111,7 +135,12 @@ interface ComicFormProps {
   submitLabel: string;
 }
 
-function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }: ComicFormProps) {
+function ComicForm({
+  initial = EMPTY_FORM,
+  onSubmit,
+  isSubmitting,
+  submitLabel,
+}: ComicFormProps) {
   const [form, setForm] = useState<ComicFormData>(initial);
 
   const handleGenreToggle = (genre: string) => {
@@ -209,7 +238,9 @@ function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }
               src={form.coverUrl}
               alt="Preview cover"
               className="h-16 w-12 object-cover rounded border border-border"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
             />
             <p className="text-xs text-muted-foreground">Preview cover</p>
           </div>
@@ -246,7 +277,11 @@ function ComicForm({ initial = EMPTY_FORM, onSubmit, isSubmitting, submitLabel }
 // ─── Daftar Komik Tab ─────────────────────────────────────────────────────────
 
 function DaftarKomikTab() {
-  const { data: comics = [], isLoading } = useListComics(BigInt(0), BigInt(100), "latest");
+  const { data: comics = [], isLoading } = useListComics(
+    BigInt(0),
+    BigInt(100),
+    "latest",
+  );
   const deleteComic = useDeleteComic();
   const updateComic = useUpdateComic();
 
@@ -285,7 +320,9 @@ function DaftarKomikTab() {
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {["t1","t2","t3"].map((id) => <Skeleton key={id} className="h-12 w-full" />)}
+        {["t1", "t2", "t3"].map((id) => (
+          <Skeleton key={id} className="h-12 w-full" />
+        ))}
       </div>
     );
   }
@@ -297,22 +334,36 @@ function DaftarKomikTab() {
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="text-muted-foreground">Judul</TableHead>
-              <TableHead className="text-muted-foreground hidden sm:table-cell">Status</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">Genre</TableHead>
-              <TableHead className="text-muted-foreground hidden lg:table-cell">Views</TableHead>
-              <TableHead className="text-muted-foreground text-right">Aksi</TableHead>
+              <TableHead className="text-muted-foreground hidden sm:table-cell">
+                Status
+              </TableHead>
+              <TableHead className="text-muted-foreground hidden md:table-cell">
+                Genre
+              </TableHead>
+              <TableHead className="text-muted-foreground hidden lg:table-cell">
+                Views
+              </TableHead>
+              <TableHead className="text-muted-foreground text-right">
+                Aksi
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {comics.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={5}
+                  className="text-center text-muted-foreground py-8"
+                >
                   Belum ada komik
                 </TableCell>
               </TableRow>
             ) : (
               comics.map((comic) => (
-                <TableRow key={comic.id.toString()} className="border-border hover:bg-secondary/50">
+                <TableRow
+                  key={comic.id.toString()}
+                  className="border-border hover:bg-secondary/50"
+                >
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-foreground text-sm truncate max-w-[160px]">
@@ -334,7 +385,8 @@ function DaftarKomikTab() {
                           : "border-muted-foreground text-muted-foreground"
                       }`}
                     >
-                      {comic.status.charAt(0).toUpperCase() + comic.status.slice(1)}
+                      {comic.status.charAt(0).toUpperCase() +
+                        comic.status.slice(1)}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
@@ -404,7 +456,13 @@ interface ChapterGrabRowProps {
   failed: boolean;
 }
 
-function ChapterGrabRow({ chapter, onGrab, isGrabbing, grabbed, failed }: ChapterGrabRowProps) {
+function ChapterGrabRow({
+  chapter,
+  onGrab,
+  isGrabbing,
+  grabbed,
+  failed,
+}: ChapterGrabRowProps) {
   const hasMangaDexId = !!chapter.mangadexChapterId;
 
   return (
@@ -414,9 +472,13 @@ function ChapterGrabRow({ chapter, onGrab, isGrabbing, grabbed, failed }: Chapte
           Ch.{chapter.chapterNumber}
         </span>
         {chapter.title ? (
-          <span className="text-sm text-foreground truncate">{chapter.title}</span>
+          <span className="text-sm text-foreground truncate">
+            {chapter.title}
+          </span>
         ) : (
-          <span className="text-sm text-muted-foreground/60 italic">Tanpa judul</span>
+          <span className="text-sm text-muted-foreground/60 italic">
+            Tanpa judul
+          </span>
         )}
         {hasMangaDexId && (
           <Badge className="bg-primary/20 text-primary border border-primary/30 text-[9px] px-1 py-0 shrink-0">
@@ -460,10 +522,15 @@ function ImportMangaDexTab() {
   const [importedComicId, setImportedComicId] = useState<bigint | null>(null);
   const [importedMangadexId, setImportedMangadexId] = useState<string>("");
   const [chaptersFetched, setChaptersFetched] = useState(false);
-  const [grabbingChapterId, setGrabbingChapterId] = useState<bigint | null>(null);
+  const [grabbingChapterId, setGrabbingChapterId] = useState<bigint | null>(
+    null,
+  );
   const [grabbedIds, setGrabbedIds] = useState<Set<string>>(new Set());
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const importMutation = useImportFromMangaDex();
   const fetchChaptersMutation = useFetchMangaDexChapters();
@@ -495,7 +562,9 @@ function ImportMangaDexTab() {
       setFailedIds(new Set());
       toast.success(`Komik berhasil diimport! ID: ${comicId.toString()}`);
     } catch (err) {
-      toast.error(`Gagal import: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(
+        `Gagal import: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -510,21 +579,29 @@ function ImportMangaDexTab() {
       await refetchChapters();
       toast.success("Chapter berhasil diambil dari MangaDex");
     } catch (err) {
-      toast.error(`Gagal ambil chapter: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(
+        `Gagal ambil chapter: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
   const handleGrabChapterPages = async (chapterId: bigint) => {
     const idStr = chapterId.toString();
     setGrabbingChapterId(chapterId);
-    setFailedIds((prev) => { const next = new Set(prev); next.delete(idStr); return next; });
+    setFailedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(idStr);
+      return next;
+    });
     try {
       await fetchPagesMutation.mutateAsync(chapterId);
       setGrabbedIds((prev) => new Set(prev).add(idStr));
       toast.success("Halaman berhasil diambil");
     } catch (err) {
       setFailedIds((prev) => new Set(prev).add(idStr));
-      toast.error(`Gagal grab halaman: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(
+        `Gagal grab halaman: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setGrabbingChapterId(null);
     }
@@ -541,7 +618,11 @@ function ImportMangaDexTab() {
     for (const chapter of eligible) {
       const idStr = chapter.id.toString();
       setGrabbingChapterId(chapter.id);
-      setFailedIds((prev) => { const next = new Set(prev); next.delete(idStr); return next; });
+      setFailedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(idStr);
+        return next;
+      });
       try {
         await fetchPagesMutation.mutateAsync(chapter.id);
         setGrabbedIds((prev) => new Set(prev).add(idStr));
@@ -557,7 +638,9 @@ function ImportMangaDexTab() {
     setBatchProgress(null);
   };
 
-  const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+  const sortedChapters = [...chapters].sort(
+    (a, b) => a.chapterNumber - b.chapterNumber,
+  );
   const eligibleCount = chapters.filter((c) => !!c.mangadexChapterId).length;
   const batchPct = batchProgress
     ? Math.round((batchProgress.current / batchProgress.total) * 100)
@@ -613,7 +696,9 @@ function ImportMangaDexTab() {
             <span className="text-xs font-mono bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
               2
             </span>
-            <p className="text-sm font-semibold text-foreground">Ambil Daftar Chapter</p>
+            <p className="text-sm font-semibold text-foreground">
+              Ambil Daftar Chapter
+            </p>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
             Ambil semua chapter dari MangaDex dan simpan ke database.
@@ -649,7 +734,9 @@ function ImportMangaDexTab() {
               <span className="text-xs font-mono bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
                 3
               </span>
-              <p className="text-sm font-semibold text-foreground">Grab Halaman</p>
+              <p className="text-sm font-semibold text-foreground">
+                Grab Halaman
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
@@ -684,7 +771,10 @@ function ImportMangaDexTab() {
           {batchProgress !== null && (
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Memproses {batchProgress.current} / {batchProgress.total} chapter</span>
+                <span>
+                  Memproses {batchProgress.current} / {batchProgress.total}{" "}
+                  chapter
+                </span>
                 <span>{batchPct}%</span>
               </div>
               <Progress value={batchPct} className="h-1.5" />
@@ -692,10 +782,11 @@ function ImportMangaDexTab() {
           )}
 
           <p className="text-xs text-muted-foreground">
-            Klik tombol{" "}
-            <Images className="h-3 w-3 inline" />{" "}
-            untuk grab halaman per chapter, atau "Grab Semua Halaman" untuk sekaligus.
-            Chapter tanpa badge <span className="text-primary font-bold text-[10px]">MDX</span> tidak dapat di-grab.
+            Klik tombol <Images className="h-3 w-3 inline" /> untuk grab halaman
+            per chapter, atau "Grab Semua Halaman" untuk sekaligus. Chapter
+            tanpa badge{" "}
+            <span className="text-primary font-bold text-[10px]">MDX</span>{" "}
+            tidak dapat di-grab.
           </p>
 
           {/* Chapter list */}
@@ -747,7 +838,10 @@ function GrabberTab() {
   const [chapterTo, setChapterTo] = useState("1");
   const [pageFrom, setPageFrom] = useState("1");
   const [pageTo, setPageTo] = useState("20");
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [grabLog, setGrabLog] = useState<{ id: number; text: string }[]>([]);
 
   const grabMutation = useGrabChapterPages();
@@ -768,20 +862,22 @@ function GrabberTab() {
       return;
     }
     if (!urlTemplate.includes("{page}")) {
-      toast.error("URL template harus mengandung {page} sebagai placeholder nomor halaman");
+      toast.error(
+        "URL template harus mengandung {page} sebagai placeholder nomor halaman",
+      );
       return;
     }
 
-    const from = parseInt(chapterFrom, 10);
-    const to = parseInt(chapterTo, 10);
-    const pFrom = parseInt(pageFrom, 10);
-    const pTo = parseInt(pageTo, 10);
+    const from = Number.parseInt(chapterFrom, 10);
+    const to = Number.parseInt(chapterTo, 10);
+    const pFrom = Number.parseInt(pageFrom, 10);
+    const pTo = Number.parseInt(pageTo, 10);
 
-    if (isNaN(from) || isNaN(to) || from > to) {
+    if (Number.isNaN(from) || Number.isNaN(to) || from > to) {
       toast.error("Range chapter tidak valid");
       return;
     }
-    if (isNaN(pFrom) || isNaN(pTo) || pFrom > pTo) {
+    if (Number.isNaN(pFrom) || Number.isNaN(pTo) || pFrom > pTo) {
       toast.error("Range halaman tidak valid");
       return;
     }
@@ -817,7 +913,7 @@ function GrabberTab() {
           addLog(`  → Chapter ${ch} dibuat (ID: ${chapterId.toString()})`);
         } catch (err) {
           addLog(`  ✗ Gagal membuat chapter ${ch}: ${String(err)}`);
-          setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+          setProgress((p) => (p ? { ...p, current: p.current + 1 } : null));
           continue;
         }
       }
@@ -832,17 +928,21 @@ function GrabberTab() {
         });
         addLog(`  ✓ Chapter ${ch} selesai di-grab`);
       } catch (err) {
-        addLog(`  ✗ Gagal grab chapter ${ch}: ${err instanceof Error ? err.message : String(err)}`);
+        addLog(
+          `  ✗ Gagal grab chapter ${ch}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
-      setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+      setProgress((p) => (p ? { ...p, current: p.current + 1 } : null));
     }
 
     setProgress((p) => (p ? { ...p, current: p.total } : null));
     toast.success("Proses grabbing selesai!");
   };
 
-  const grabPct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
+  const grabPct = progress
+    ? Math.round((progress.current / progress.total) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -890,9 +990,12 @@ function GrabberTab() {
               className="bg-background border-border text-foreground font-mono text-sm placeholder:text-muted-foreground"
             />
             <p className="text-xs text-muted-foreground">
-              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor chapter dan{" "}
-              <code className="text-primary">{"{page}"}</code> untuk nomor halaman.
-              Contoh: <code className="text-primary/70">https://example.com/chapter-{"{ch}"}/{"{page}"}.jpg</code>
+              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor
+              chapter dan <code className="text-primary">{"{page}"}</code> untuk
+              nomor halaman. Contoh:{" "}
+              <code className="text-primary/70">
+                https://example.com/chapter-{"{ch}"}/{"{page}"}.jpg
+              </code>
             </p>
           </div>
 
@@ -961,7 +1064,10 @@ function GrabberTab() {
           {grabLog.length > 0 && (
             <div className="bg-background rounded-md p-3 max-h-40 overflow-y-auto custom-scroll">
               {grabLog.map((entry) => (
-                <p key={entry.id} className="text-xs font-mono text-muted-foreground">
+                <p
+                  key={entry.id}
+                  className="text-xs font-mono text-muted-foreground"
+                >
                   {entry.text}
                 </p>
               ))}
@@ -991,8 +1097,10 @@ function GrabberTab() {
       {selectedComic && (
         <div className="text-xs text-muted-foreground">
           Komik dipilih:{" "}
-          <span className="text-foreground font-semibold">{selectedComic.title}</span> —{" "}
-          {existingChapters.length} chapter tersedia
+          <span className="text-foreground font-semibold">
+            {selectedComic.title}
+          </span>{" "}
+          — {existingChapters.length} chapter tersedia
         </div>
       )}
     </div>
@@ -1024,7 +1132,9 @@ function TambahManualTab() {
       toast.success(`Komik "${data.title}" berhasil ditambahkan!`);
       void navigate({ to: "/comic/$id", params: { id: id.toString() } });
     } catch (err) {
-      toast.error(`Gagal membuat komik: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(
+        `Gagal membuat komik: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -1032,7 +1142,9 @@ function TambahManualTab() {
     return (
       <div className="p-4 rounded-lg bg-secondary border border-border flex items-center justify-center py-8">
         <Loader2 className="h-5 w-5 text-primary animate-spin mr-2" />
-        <span className="text-sm text-muted-foreground">Menghubungkan ke backend...</span>
+        <span className="text-sm text-muted-foreground">
+          Menghubungkan ke backend...
+        </span>
       </div>
     );
   }
@@ -1056,8 +1168,13 @@ function SupadataScraperTab() {
   const [urlTemplate, setUrlTemplate] = useState("");
   const [chapterFrom, setChapterFrom] = useState("1");
   const [chapterTo, setChapterTo] = useState("1");
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [scrapeLog, setScrapeLog] = useState<{ id: number; text: string }[]>([]);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [scrapeLog, setScrapeLog] = useState<{ id: number; text: string }[]>(
+    [],
+  );
 
   const scrapeMutation = useGrabChapterPagesViaSupadata();
   const createChapterMutation = useCreateChapter();
@@ -1077,10 +1194,10 @@ function SupadataScraperTab() {
       return;
     }
 
-    const from = parseInt(chapterFrom, 10);
-    const to = parseInt(chapterTo, 10);
+    const from = Number.parseInt(chapterFrom, 10);
+    const to = Number.parseInt(chapterTo, 10);
 
-    if (isNaN(from) || isNaN(to) || from > to) {
+    if (Number.isNaN(from) || Number.isNaN(to) || from > to) {
       toast.error("Range chapter tidak valid");
       return;
     }
@@ -1116,7 +1233,7 @@ function SupadataScraperTab() {
           addLog(`  → Chapter ${ch} dibuat (ID: ${chapterId.toString()})`);
         } catch (err) {
           addLog(`  ✗ Gagal membuat chapter ${ch}: ${String(err)}`);
-          setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+          setProgress((p) => (p ? { ...p, current: p.current + 1 } : null));
           continue;
         }
       }
@@ -1129,30 +1246,38 @@ function SupadataScraperTab() {
         });
         addLog(`  ✓ Chapter ${ch} berhasil di-scrape via Supadata`);
       } catch (err) {
-        addLog(`  ✗ Gagal scrape chapter ${ch}: ${err instanceof Error ? err.message : String(err)}`);
+        addLog(
+          `  ✗ Gagal scrape chapter ${ch}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
-      setProgress((p) => p ? { ...p, current: p.current + 1 } : null);
+      setProgress((p) => (p ? { ...p, current: p.current + 1 } : null));
     }
 
     setProgress((p) => (p ? { ...p, current: p.total } : null));
     toast.success("Proses scraping selesai!");
   };
 
-  const scrapePct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
-  const isScraping = scrapeMutation.isPending || createChapterMutation.isPending;
+  const scrapePct = progress
+    ? Math.round((progress.current / progress.total) * 100)
+    : 0;
+  const isScraping =
+    scrapeMutation.isPending || createChapterMutation.isPending;
 
   return (
     <div className="space-y-5">
       <div className="p-4 rounded-lg bg-secondary border border-border">
         <p className="text-sm text-muted-foreground mb-4">
           Ambil halaman komik menggunakan{" "}
-          <span className="text-primary font-semibold">Supadata Web Scraper</span>.
-          Masukkan URL template dengan{" "}
+          <span className="text-primary font-semibold">
+            Supadata Web Scraper
+          </span>
+          . Masukkan URL template dengan{" "}
           <code className="bg-background px-1 py-0.5 rounded text-xs text-primary font-mono">
             {"{ch}"}
           </code>{" "}
-          untuk nomor chapter. Supadata akan otomatis mendeteksi dan mengekstrak gambar dari halaman. Contoh:{" "}
+          untuk nomor chapter. Supadata akan otomatis mendeteksi dan mengekstrak
+          gambar dari halaman. Contoh:{" "}
           <code className="bg-background px-1 py-0.5 rounded text-xs text-muted-foreground font-mono">
             https://example.com/manga/chapter-{"{ch}"}/
           </code>
@@ -1186,8 +1311,9 @@ function SupadataScraperTab() {
               className="bg-background border-border text-foreground font-mono text-sm placeholder:text-muted-foreground"
             />
             <p className="text-xs text-muted-foreground">
-              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor chapter.
-              Supadata akan otomatis menemukan semua gambar di halaman tersebut.
+              Gunakan <code className="text-primary">{"{ch}"}</code> untuk nomor
+              chapter. Supadata akan otomatis menemukan semua gambar di halaman
+              tersebut.
             </p>
           </div>
 
@@ -1232,7 +1358,10 @@ function SupadataScraperTab() {
           {scrapeLog.length > 0 && (
             <div className="bg-background rounded-md p-3 max-h-40 overflow-y-auto custom-scroll">
               {scrapeLog.map((entry) => (
-                <p key={entry.id} className="text-xs font-mono text-muted-foreground">
+                <p
+                  key={entry.id}
+                  className="text-xs font-mono text-muted-foreground"
+                >
                   {entry.text}
                 </p>
               ))}
@@ -1257,10 +1386,599 @@ function SupadataScraperTab() {
       {selectedComic && (
         <div className="text-xs text-muted-foreground">
           Komik dipilih:{" "}
-          <span className="text-foreground font-semibold">{selectedComic.title}</span> —{" "}
-          {existingChapters.length} chapter tersedia
+          <span className="text-foreground font-semibold">
+            {selectedComic.title}
+          </span>{" "}
+          — {existingChapters.length} chapter tersedia
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Blob Storage Tab ─────────────────────────────────────────────────────────
+
+function getBlobDirectUrl(blobId: string): string {
+  try {
+    return ExternalBlob.fromURL(blobId).getDirectURL();
+  } catch {
+    return "";
+  }
+}
+
+function truncateBlobId(blobId: string, maxLen = 28): string {
+  if (blobId.length <= maxLen) return blobId;
+  return `${blobId.slice(0, 12)}…${blobId.slice(-10)}`;
+}
+
+interface BlobCardProps {
+  blobId: string;
+  label: string;
+  sublabel?: string;
+  onDelete?: () => Promise<void>;
+  isDeleting?: boolean;
+}
+
+function BlobCard({
+  blobId,
+  label,
+  sublabel,
+  onDelete,
+  isDeleting,
+}: BlobCardProps) {
+  const [imgError, setImgError] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const directUrl = getBlobDirectUrl(blobId);
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(blobId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const handleDeleteClick = () => {
+    setConfirmDelete(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDelete(false);
+    if (onDelete) await onDelete();
+  };
+
+  const handleDeleteCancel = () => {
+    setConfirmDelete(false);
+  };
+
+  return (
+    <div className="group relative flex flex-col rounded-lg border border-border bg-card overflow-hidden hover:border-primary/50 transition-colors">
+      {/* Thumbnail */}
+      <div className="aspect-[2/3] relative bg-secondary overflow-hidden">
+        {directUrl && !imgError ? (
+          <img
+            src={directUrl}
+            alt={label}
+            loading="lazy"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
+            <ImageOff className="h-8 w-8" />
+            <span className="text-[10px] font-mono px-2 text-center">
+              No preview
+            </span>
+          </div>
+        )}
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <a
+            href={directUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="h-4 w-4 text-white" />
+          </a>
+        </div>
+        {/* Delete loading overlay */}
+        {isDeleting && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <Loader2 className="h-6 w-6 text-white animate-spin" />
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-2 space-y-1.5 flex-1">
+        <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">
+          {label}
+        </p>
+        {sublabel && (
+          <p className="text-[10px] text-muted-foreground font-mono">
+            {sublabel}
+          </p>
+        )}
+        <div className="flex items-center gap-1 mt-1">
+          <code className="text-[9px] font-mono text-muted-foreground/70 truncate flex-1 bg-secondary rounded px-1 py-0.5">
+            {truncateBlobId(blobId)}
+          </code>
+          <button
+            type="button"
+            onClick={handleCopy}
+            title="Salin Blob ID"
+            className="shrink-0 p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {copied ? (
+              <CheckCircle2 className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <a
+            href={directUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
+          >
+            <ExternalLink className="h-2.5 w-2.5" />
+            Buka
+          </a>
+          {onDelete && !confirmDelete && (
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              title="Hapus blob"
+              className="flex items-center gap-0.5 text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-2.5 w-2.5" />
+              )}
+              Hapus
+            </button>
+          )}
+          {onDelete && confirmDelete && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void handleDeleteConfirm()}
+                className="text-[10px] text-destructive hover:text-destructive/80 font-semibold transition-colors"
+              >
+                Ya
+              </button>
+              <span className="text-[10px] text-muted-foreground">/</span>
+              <button
+                type="button"
+                onClick={handleDeleteCancel}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Chapter pages blob viewer – loads pages lazily when expanded
+interface ChapterPagesBlobsProps {
+  chapter: Chapter;
+  comicTitle: string;
+}
+
+function ChapterPagesBlobs({ chapter, comicTitle }: ChapterPagesBlobsProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [deletingPageId, setDeletingPageId] = useState<bigint | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const {
+    data: pages = [],
+    isLoading,
+    refetch,
+  } = useListPages(expanded ? chapter.id : null);
+
+  const deletePageMutation = useDeletePage();
+  const deleteAllPagesMutation = useDeleteAllChapterPages();
+
+  const pagesWithBlobs = pages.filter((p) => !!p.blobId);
+
+  const handleDeletePage = async (pageId: bigint) => {
+    setDeletingPageId(pageId);
+    try {
+      await deletePageMutation.mutateAsync({ pageId, chapterId: chapter.id });
+      toast.success("Halaman berhasil dihapus");
+      void refetch();
+    } catch {
+      toast.error("Gagal menghapus halaman");
+    } finally {
+      setDeletingPageId(null);
+    }
+  };
+
+  const handleDeleteAllPages = async () => {
+    setConfirmDeleteAll(false);
+    try {
+      await deleteAllPagesMutation.mutateAsync(chapter.id);
+      toast.success(`Semua halaman Chapter ${chapter.chapterNumber} dihapus`);
+      void refetch();
+    } catch {
+      toast.error("Gagal menghapus semua halaman");
+    }
+  };
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-secondary hover:bg-secondary/80 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-mono text-muted-foreground shrink-0">
+            Ch.{chapter.chapterNumber}
+          </span>
+          <span className="text-sm text-foreground truncate">
+            {chapter.title || `Chapter ${chapter.chapterNumber}`}
+          </span>
+          {!expanded && (
+            <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0">
+              — {comicTitle}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {expanded && !isLoading && (
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {pagesWithBlobs.length} blob
+            </span>
+          )}
+          {isLoading ? (
+            <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
+          ) : expanded ? (
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="p-3 bg-background space-y-3">
+          {/* Delete all chapter pages button */}
+          {!isLoading && pagesWithBlobs.length > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {pagesWithBlobs.length} halaman tersimpan
+              </span>
+              {!confirmDeleteAll ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  onClick={() => setConfirmDeleteAll(true)}
+                  disabled={deleteAllPagesMutation.isPending}
+                >
+                  {deleteAllPagesMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : (
+                    <Trash2 className="h-3 w-3 mr-1" />
+                  )}
+                  Hapus Semua Halaman
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-destructive font-medium">
+                    Yakin hapus semua?
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-6 text-xs px-2"
+                    onClick={() => void handleDeleteAllPages()}
+                    disabled={deleteAllPagesMutation.isPending}
+                  >
+                    Ya, Hapus
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs px-2 border-border"
+                    onClick={() => setConfirmDeleteAll(false)}
+                  >
+                    Batal
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {["s1", "s2", "s3", "s4", "s5", "s6"].map((k) => (
+                <div
+                  key={k}
+                  className="aspect-[2/3] rounded-md overflow-hidden"
+                >
+                  <Skeleton className="w-full h-full" />
+                </div>
+              ))}
+            </div>
+          ) : pagesWithBlobs.length === 0 ? (
+            <div className="py-6 flex flex-col items-center gap-2 text-muted-foreground/50">
+              <HardDrive className="h-8 w-8" />
+              <p className="text-xs">Tidak ada halaman dengan blob ID</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {pagesWithBlobs
+                .sort((a, b) => Number(a.pageNumber) - Number(b.pageNumber))
+                .map((page) => (
+                  <BlobCard
+                    key={page.id.toString()}
+                    blobId={page.blobId}
+                    label={`Hal. ${page.pageNumber.toString()}`}
+                    sublabel={`Ch.${chapter.chapterNumber} • ${truncateBlobId(page.blobId, 12)}`}
+                    onDelete={() => handleDeletePage(page.id)}
+                    isDeleting={deletingPageId === page.id}
+                  />
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Comic chapters blob viewer
+interface ComicChaptersBlobsProps {
+  comic: Comic;
+}
+
+function ComicChaptersBlobs({ comic }: ComicChaptersBlobsProps) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: chapters = [], isLoading } = useListChapters(
+    expanded ? comic.id : null,
+  );
+
+  const deleteComicCoverMutation = useDeleteComicCover();
+
+  const sortedChapters = [...chapters].sort(
+    (a, b) => a.chapterNumber - b.chapterNumber,
+  );
+
+  const handleDeleteCover = async () => {
+    if (!confirm(`Hapus cover blob komik "${comic.title}"?`)) return;
+    try {
+      await deleteComicCoverMutation.mutateAsync(comic.id);
+      toast.success("Cover berhasil dihapus");
+    } catch {
+      toast.error("Gagal menghapus cover");
+    }
+  };
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-secondary">
+        <button
+          type="button"
+          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {comic.coverBlobId ? (
+              <img
+                src={getBlobDirectUrl(comic.coverBlobId)}
+                alt={comic.title}
+                className="h-8 w-6 object-cover rounded shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = PLACEHOLDER_COVER;
+                }}
+              />
+            ) : (
+              <div className="h-8 w-6 bg-background rounded shrink-0 flex items-center justify-center">
+                <ImageOff className="h-3 w-3 text-muted-foreground/40" />
+              </div>
+            )}
+            <span className="text-sm font-medium text-foreground truncate">
+              {comic.title}
+            </span>
+          </div>
+        </button>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {expanded && !isLoading && (
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {chapters.length} chapter
+            </span>
+          )}
+          {/* Hapus Cover button */}
+          {comic.coverBlobId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[10px] text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+              onClick={() => void handleDeleteCover()}
+              disabled={deleteComicCoverMutation.isPending}
+              title="Hapus cover blob"
+            >
+              {deleteComicCoverMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+              <span className="ml-1 hidden sm:inline">Hapus Cover</span>
+            </Button>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : expanded ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="p-3 bg-background space-y-2">
+          {isLoading ? (
+            <div className="space-y-2">
+              {["c1", "c2", "c3"].map((k) => (
+                <Skeleton key={k} className="h-10 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : sortedChapters.length === 0 ? (
+            <div className="py-4 flex flex-col items-center gap-2 text-muted-foreground/50">
+              <p className="text-xs">Belum ada chapter</p>
+            </div>
+          ) : (
+            sortedChapters.map((chapter) => (
+              <ChapterPagesBlobs
+                key={chapter.id.toString()}
+                chapter={chapter}
+                comicTitle={comic.title}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BlobStorageTab() {
+  const { data: comics = [], isLoading: comicsLoading } = useListComics(
+    BigInt(0),
+    BigInt(100),
+    "latest",
+  );
+
+  const deleteComicCoverMutation = useDeleteComicCover();
+
+  const comicsWithCover = comics.filter((c) => !!c.coverBlobId);
+
+  const handleDeleteCoverFromGrid = async (comicId: bigint, title: string) => {
+    try {
+      await deleteComicCoverMutation.mutateAsync(comicId);
+      toast.success(`Cover "${title}" berhasil dihapus`);
+    } catch {
+      toast.error("Gagal menghapus cover");
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Header info */}
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-secondary border border-border">
+        <HardDrive className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">
+            Blob Storage Browser
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Lihat semua gambar yang tersimpan di blob storage Caffeine. Cover
+            komik ditampilkan langsung. Klik komik untuk melihat blob halaman
+            chapter-nya, lengkap dengan tombol hapus per-halaman.
+          </p>
+        </div>
+      </div>
+
+      {/* Section 1: Cover Komik */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-sm font-semibold text-foreground tracking-wide uppercase">
+            Cover Komik
+          </h2>
+          {!comicsLoading && (
+            <span className="text-xs text-muted-foreground font-mono bg-secondary px-1.5 py-0.5 rounded">
+              {comicsWithCover.length}
+            </span>
+          )}
+        </div>
+
+        {comicsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"].map((k) => (
+              <div key={k} className="aspect-[2/3] rounded-lg overflow-hidden">
+                <Skeleton className="w-full h-full" />
+              </div>
+            ))}
+          </div>
+        ) : comicsWithCover.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3 text-muted-foreground/50 border border-dashed border-border rounded-lg">
+            <ImageOff className="h-10 w-10" />
+            <p className="text-sm">
+              Belum ada cover komik yang tersimpan di blob
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {comicsWithCover.map((comic) => (
+              <BlobCard
+                key={comic.id.toString()}
+                blobId={comic.coverBlobId!}
+                label={comic.title}
+                sublabel="Cover"
+                onDelete={() =>
+                  handleDeleteCoverFromGrid(comic.id, comic.title)
+                }
+                isDeleting={deleteComicCoverMutation.isPending}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Section 2: Halaman Chapter */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-sm font-semibold text-foreground tracking-wide uppercase">
+            Halaman Chapter
+          </h2>
+          {!comicsLoading && (
+            <span className="text-xs text-muted-foreground font-mono bg-secondary px-1.5 py-0.5 rounded">
+              {comics.length} komik
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Klik komik untuk melihat chapter-nya, lalu klik chapter untuk melihat
+          blob halaman.
+        </p>
+
+        {comicsLoading ? (
+          <div className="space-y-2">
+            {["r1", "r2", "r3", "r4"].map((k) => (
+              <Skeleton key={k} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : comics.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3 text-muted-foreground/50 border border-dashed border-border rounded-lg">
+            <HardDrive className="h-10 w-10" />
+            <p className="text-sm">Belum ada komik</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {comics.map((comic) => (
+              <ComicChaptersBlobs key={comic.id.toString()} comic={comic} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -1270,7 +1988,7 @@ function SupadataScraperTab() {
 export function AdminPage() {
   const navigate = useNavigate();
   const { identity } = useInternetIdentity();
-  const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const { isLoading: adminLoading } = useIsAdmin();
   const { actor, isFetching: actorFetching } = useActor();
 
   // Redirect if not logged in
@@ -1285,7 +2003,9 @@ export function AdminPage() {
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="h-8 w-8 text-primary animate-spin" />
           <p className="text-sm text-muted-foreground">
-            {actorFetching ? "Menghubungkan ke backend..." : "Memuat data admin..."}
+            {actorFetching
+              ? "Menghubungkan ke backend..."
+              : "Memuat data admin..."}
           </p>
         </div>
       </main>
@@ -1296,7 +2016,9 @@ export function AdminPage() {
     return (
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <p className="text-sm text-destructive">Gagal terhubung ke backend. Coba refresh halaman.</p>
+          <p className="text-sm text-destructive">
+            Gagal terhubung ke backend. Coba refresh halaman.
+          </p>
         </div>
       </main>
     );
@@ -1350,6 +2072,13 @@ export function AdminPage() {
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Tambah Manual
           </TabsTrigger>
+          <TabsTrigger
+            value="blob"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground text-xs"
+          >
+            <HardDrive className="h-3.5 w-3.5 mr-1.5" />
+            Blob Storage
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="list">
@@ -1366,6 +2095,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="manual">
           <TambahManualTab />
+        </TabsContent>
+        <TabsContent value="blob">
+          <BlobStorageTab />
         </TabsContent>
       </Tabs>
     </main>

@@ -100,9 +100,12 @@ export interface _SERVICE {
     [string, [] | [string], Array<string>, string, string, string, boolean],
     bigint
   >,
+  'deleteAllChapterPages' : ActorMethod<[bigint], undefined>,
   'deleteChapter' : ActorMethod<[bigint], undefined>,
   'deleteComic' : ActorMethod<[bigint], undefined>,
+  'deleteComicCover' : ActorMethod<[bigint], undefined>,
   'deleteComment' : ActorMethod<[bigint], undefined>,
+  'deletePage' : ActorMethod<[bigint], undefined>,
   'fetchMangaDexChapterPages' : ActorMethod<[bigint], undefined>,
   'fetchMangaDexChapters' : ActorMethod<[string, bigint], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,

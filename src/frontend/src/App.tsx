@@ -1,19 +1,19 @@
+import { Toaster } from "@/components/ui/sonner";
 import {
-  createRouter,
-  createRoute,
-  createRootRoute,
-  RouterProvider,
   Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
   redirect,
 } from "@tanstack/react-router";
-import { Toaster } from "@/components/ui/sonner";
-import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
-import { HomePage } from "./pages/HomePage";
-import { SearchPage } from "./pages/SearchPage";
-import { ComicDetailPage } from "./pages/ComicDetailPage";
-import { ReaderPage } from "./pages/ReaderPage";
+import { Navbar } from "./components/Navbar";
 import { AdminPage } from "./pages/AdminPage";
+import { ComicDetailPage } from "./pages/ComicDetailPage";
+import { HomePage } from "./pages/HomePage";
+import { ReaderPage } from "./pages/ReaderPage";
+import { SearchPage } from "./pages/SearchPage";
 
 // ─── Root Layout ──────────────────────────────────────────────────────────────
 

@@ -1,12 +1,40 @@
-import { useState } from "react";
-import { ChevronRight, Flame, Grid } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useListComics } from "../hooks/useQueries";
-import { ComicCard, ComicCardSkeleton } from "../components/ComicCard";
+import { ChevronRight, Flame, Grid } from "lucide-react";
+import { useState } from "react";
 import type { Comic } from "../backend.d";
+import { ComicCard, ComicCardSkeleton } from "../components/ComicCard";
+import { useListComics } from "../hooks/useQueries";
 
-const SKELETON_ROW_IDS = ["sk-r1","sk-r2","sk-r3","sk-r4","sk-r5","sk-r6","sk-r7","sk-r8"];
-const SKELETON_GRID_IDS = ["sk-g1","sk-g2","sk-g3","sk-g4","sk-g5","sk-g6","sk-g7","sk-g8","sk-g9","sk-g10","sk-g11","sk-g12","sk-g13","sk-g14","sk-g15","sk-g16","sk-g17","sk-g18"];
+const SKELETON_ROW_IDS = [
+  "sk-r1",
+  "sk-r2",
+  "sk-r3",
+  "sk-r4",
+  "sk-r5",
+  "sk-r6",
+  "sk-r7",
+  "sk-r8",
+];
+const SKELETON_GRID_IDS = [
+  "sk-g1",
+  "sk-g2",
+  "sk-g3",
+  "sk-g4",
+  "sk-g5",
+  "sk-g6",
+  "sk-g7",
+  "sk-g8",
+  "sk-g9",
+  "sk-g10",
+  "sk-g11",
+  "sk-g12",
+  "sk-g13",
+  "sk-g14",
+  "sk-g15",
+  "sk-g16",
+  "sk-g17",
+  "sk-g18",
+];
 
 const SORT_OPTIONS = [
   { value: "latest", label: "Terbaru" },
@@ -18,16 +46,20 @@ function sortComics(comics: Comic[], sortBy: string): Comic[] {
   const sorted = [...comics];
   if (sortBy === "latest") {
     return sorted.sort((a, b) => Number(b.updatedAt - a.updatedAt));
-  } else if (sortBy === "popular") {
-    return sorted.sort((a, b) => Number(b.viewCount - a.viewCount));
-  } else {
-    return sorted.sort((a, b) => a.title.localeCompare(b.title));
   }
+  if (sortBy === "popular") {
+    return sorted.sort((a, b) => Number(b.viewCount - a.viewCount));
+  }
+  return sorted.sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export function HomePage() {
   const [sortBy, setSortBy] = useState("latest");
-  const { data: comics, isLoading } = useListComics(BigInt(0), BigInt(50), sortBy);
+  const { data: comics, isLoading } = useListComics(
+    BigInt(0),
+    BigInt(50),
+    sortBy,
+  );
 
   const sortedComics = comics ? sortComics(comics, sortBy) : [];
   const latestComics = sortedComics.slice(0, 12);
@@ -89,10 +121,7 @@ export function HomePage() {
             <div className="flex gap-3 overflow-x-auto pb-3 custom-scroll snap-x snap-mandatory">
               {isLoading
                 ? SKELETON_ROW_IDS.map((id) => (
-                    <div
-                      key={id}
-                      className="shrink-0 w-[120px] snap-start"
-                    >
+                    <div key={id} className="shrink-0 w-[120px] snap-start">
                       <ComicCardSkeleton />
                     </div>
                   ))
@@ -145,9 +174,7 @@ export function HomePage() {
           {/* Grid */}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
             {isLoading
-              ? SKELETON_GRID_IDS.map((id) => (
-                  <ComicCardSkeleton key={id} />
-                ))
+              ? SKELETON_GRID_IDS.map((id) => <ComicCardSkeleton key={id} />)
               : sortedComics.map((comic) => (
                   <ComicCard key={comic.id.toString()} comic={comic} />
                 ))}

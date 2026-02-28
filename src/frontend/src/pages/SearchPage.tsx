@@ -1,8 +1,5 @@
-import { useState, useEffect } from "react";
-import { Search, X } from "lucide-react";
-import { useSearch } from "@tanstack/react-router";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -10,9 +7,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSearchComics, useListComics } from "../hooks/useQueries";
-import { ComicCard, ComicCardSkeleton } from "../components/ComicCard";
+import { useSearch } from "@tanstack/react-router";
+import { Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { Comic } from "../backend.d";
+import { ComicCard, ComicCardSkeleton } from "../components/ComicCard";
+import { useListComics, useSearchComics } from "../hooks/useQueries";
 
 const GENRES = [
   "Action",
@@ -34,13 +34,27 @@ const GENRES = [
 
 const STATUSES = ["Ongoing", "Completed", "Hiatus"];
 
-const SKELETON_IDS = ["s1","s2","s3","s4","s5","s6","s7","s8","s9","s10","s11","s12"];
+const SKELETON_IDS = [
+  "s1",
+  "s2",
+  "s3",
+  "s4",
+  "s5",
+  "s6",
+  "s7",
+  "s8",
+  "s9",
+  "s10",
+  "s11",
+  "s12",
+];
 
 function sortResults(comics: Comic[], sortBy: string): Comic[] {
   const arr = [...comics];
   if (sortBy === "popular") {
     return arr.sort((a, b) => Number(b.viewCount - a.viewCount));
-  } else if (sortBy === "alphabetical") {
+  }
+  if (sortBy === "alphabetical") {
     return arr.sort((a, b) => a.title.localeCompare(b.title));
   }
   // latest: by updatedAt
@@ -79,7 +93,9 @@ export function SearchPage() {
     ? (searchResult.data ?? [])
     : (allComicsResult.data ?? []);
 
-  const isLoading = isFiltered ? searchResult.isLoading : allComicsResult.isLoading;
+  const isLoading = isFiltered
+    ? searchResult.isLoading
+    : allComicsResult.isLoading;
   const comics = sortResults(rawComics, sortBy);
 
   return (

@@ -1,18 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, Link } from "@tanstack/react-router";
-import {
-  ChevronLeft,
-  ChevronRight,
-  AlignJustify,
-  LayoutTemplate,
-  ArrowLeft,
-  Loader2,
-} from "lucide-react";
+import { LazyImage } from "@/components/LazyImage";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LazyImage } from "@/components/LazyImage";
-import { useListPages, useListChapters } from "../hooks/useQueries";
+import { Link, useParams } from "@tanstack/react-router";
+import {
+  AlignJustify,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  LayoutTemplate,
+  Loader2,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalBlob } from "../backend";
+import { useListChapters, useListPages } from "../hooks/useQueries";
 
 function getPageUrl(blobId: string): string {
   if (!blobId) return "";
@@ -31,7 +31,9 @@ function getPageUrl(blobId: string): string {
 type ReadMode = "vertical" | "horizontal";
 
 export function ReaderPage() {
-  const { id, chapterId } = useParams({ from: "/reader/comic/$id/chapter/$chapterId" });
+  const { id, chapterId } = useParams({
+    from: "/reader/comic/$id/chapter/$chapterId",
+  });
   const comicId = BigInt(id);
   const chapterIdBig = BigInt(chapterId);
 
@@ -41,11 +43,12 @@ export function ReaderPage() {
   const touchStartX = useRef<number | null>(null);
   const prevChapterId = useRef<string>(chapterId);
 
-  const { data: pages = [], isLoading: pagesLoading } = useListPages(chapterIdBig);
+  const { data: pages = [], isLoading: pagesLoading } =
+    useListPages(chapterIdBig);
   const { data: chapters = [] } = useListChapters(comicId);
 
-  const sortedPages = [...pages].sort(
-    (a, b) => Number(a.pageNumber - b.pageNumber),
+  const sortedPages = [...pages].sort((a, b) =>
+    Number(a.pageNumber - b.pageNumber),
   );
   const sortedChapters = [...chapters].sort(
     (a, b) => a.chapterNumber - b.chapterNumber,
@@ -85,14 +88,14 @@ export function ReaderPage() {
   // Preload next 2 pages in horizontal mode
   useEffect(() => {
     if (mode !== "horizontal" || sortedPages.length === 0) return;
-    [currentPage + 1, currentPage + 2].forEach((idx) => {
+    for (const idx of [currentPage + 1, currentPage + 2]) {
       const page = sortedPages[idx];
-      if (!page) return;
+      if (!page) continue;
       const url = getPageUrl(page.blobId);
-      if (!url) return;
+      if (!url) continue;
       const img = new Image();
       img.src = url;
-    });
+    }
   }, [mode, currentPage, sortedPages]);
 
   // Show skeleton overlay when switching pages in horizontal mode
@@ -215,7 +218,7 @@ export function ReaderPage() {
       <div className="flex-1">
         {pagesLoading ? (
           <div className="container mx-auto px-4 py-8 space-y-2 max-w-2xl">
-            {["p1","p2","p3"].map((id) => (
+            {["p1", "p2", "p3"].map((id) => (
               <Skeleton key={id} className="w-full aspect-[2/3]" />
             ))}
           </div>
@@ -247,7 +250,10 @@ export function ReaderPage() {
                   to="/comic/$id/chapter/$chapterId"
                   params={{ id, chapterId: prevChapter.id.toString() }}
                 >
-                  <Button variant="outline" className="border-border text-muted-foreground hover:text-foreground">
+                  <Button
+                    variant="outline"
+                    className="border-border text-muted-foreground hover:text-foreground"
+                  >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Chapter {prevChapter.chapterNumber}
                   </Button>

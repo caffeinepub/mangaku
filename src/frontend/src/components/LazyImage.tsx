@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImageOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface LazyImageProps {
   src: string;
@@ -21,6 +21,7 @@ export function LazyImage({
   const [error, setError] = useState(false);
 
   // Reset visibility + state whenever src changes, then re-observe
+  // biome-ignore lint/correctness/useExhaustiveDependencies: src is an intentional dependency to reset state when image changes
   useEffect(() => {
     setInView(false);
     setLoaded(false);
@@ -44,11 +45,7 @@ export function LazyImage({
   }, [src]);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full"
-      style={{ aspectRatio }}
-    >
+    <div ref={containerRef} className="relative w-full" style={{ aspectRatio }}>
       {/* Skeleton shown until image is loaded */}
       {!loaded && !error && (
         <Skeleton className="absolute inset-0 w-full h-full rounded-none" />

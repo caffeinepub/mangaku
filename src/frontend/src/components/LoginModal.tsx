@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -5,8 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { LogIn, Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 
 interface LoginModalProps {
   open: boolean;
@@ -26,8 +26,7 @@ export function LoginModal({
       <DialogContent className="bg-card border-border max-w-sm">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl tracking-widest text-foreground">
-            MASUK KE{" "}
-            <span className="text-primary">MANGAKU</span>
+            MASUK KE <span className="text-primary">MANGAKU</span>
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
             Login diperlukan untuk berkomentar dan membaca konten 18+. Gunakan

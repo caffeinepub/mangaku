@@ -1,11 +1,10 @@
-import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { Search, Menu, X, LogIn, LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useIsAdmin } from "../hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { LogIn, LogOut, Menu, Search, Shield, X } from "lucide-react";
+import { useState } from "react";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { LoginModal } from "./LoginModal";
 
 export function Navbar() {
@@ -13,7 +12,6 @@ export function Navbar() {
   const queryClient = useQueryClient();
   const { identity, clear, login, isLoggingIn } = useInternetIdentity();
   const isAuthenticated = !!identity;
-  const { data: isAdmin } = useIsAdmin();
   // Show admin button to any logged-in user (backend enforces actual admin check)
   const showAdmin = isAuthenticated;
   const [searchQuery, setSearchQuery] = useState("");
@@ -23,7 +21,10 @@ export function Navbar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      void navigate({ to: "/search", search: { q: searchQuery.trim(), genre: "" } });
+      void navigate({
+        to: "/search",
+        search: { q: searchQuery.trim(), genre: "" },
+      });
       setMobileOpen(false);
     }
   };
@@ -39,10 +40,7 @@ export function Navbar() {
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-4 h-14">
             {/* Logo */}
-            <Link
-              to="/"
-              className="shrink-0 flex items-center gap-1 group"
-            >
+            <Link to="/" className="shrink-0 flex items-center gap-1 group">
               <span className="font-display text-2xl text-primary tracking-widest group-hover:text-primary/80 transition-colors">
                 MANGA
               </span>
@@ -123,7 +121,11 @@ export function Navbar() {
               className="md:hidden ml-auto text-muted-foreground hover:text-foreground p-1"
               aria-label="Toggle menu"
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
@@ -170,7 +172,10 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { void handleLogout(); setMobileOpen(false); }}
+                  onClick={() => {
+                    void handleLogout();
+                    setMobileOpen(false);
+                  }}
                   className="w-full text-xs"
                 >
                   <LogOut className="h-3 w-3 mr-1" />
@@ -179,7 +184,10 @@ export function Navbar() {
               ) : (
                 <Button
                   size="sm"
-                  onClick={() => { setLoginModalOpen(true); setMobileOpen(false); }}
+                  onClick={() => {
+                    setLoginModalOpen(true);
+                    setMobileOpen(false);
+                  }}
                   className="w-full text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   <LogIn className="h-3 w-3 mr-1" />
